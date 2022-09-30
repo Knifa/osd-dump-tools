@@ -189,10 +189,16 @@ class Args(argparse.Namespace):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--font", type=str, default="font")
-    parser.add_argument("--wide", action="store_true", default=False)
-    parser.add_argument("--hd", action="store_true", default=False)
-    parser.add_argument("video", type=str)
+    parser.add_argument(
+        "--font", type=str, default="font", help='font basename e.g. "font"'
+    )
+    parser.add_argument(
+        "--wide", action="store_true", default=False, help="is this a 16:9 video?"
+    )
+    parser.add_argument(
+        "--hd", action="store_true", default=False, help="is this an HD OSD recording?"
+    )
+    parser.add_argument("video", type=str, help="video file e.g. DJIG0007.mp4")
     args = cast(Args, parser.parse_args())
 
     main(args)
