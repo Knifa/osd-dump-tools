@@ -1,0 +1,5 @@
+__pycache__
+.venv
+*.mp4
+*.osd
+*.pyc

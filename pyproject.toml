@@ -7,6 +7,7 @@ authors = ["Daniel Callander <knifacat@gmail.com>"]
 [tool.poetry.dependencies]
 python = "^3.10"
 Pillow = "^9.2.0"
+ffmpeg-python = "^0.2.0"
 
 [tool.poetry.dev-dependencies]
 
