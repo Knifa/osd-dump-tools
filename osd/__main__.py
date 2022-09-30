@@ -4,10 +4,11 @@ import argparse
 import dataclasses
 import logging
 import os
+import pathlib
 import struct
+import sys
 import tempfile
 from typing import cast
-import pathlib
 
 import ffmpeg
 from PIL import Image
@@ -25,6 +26,7 @@ MAX_DISPLAY_Y = 22
 
 FRAME_SIZE = MAX_DISPLAY_X * MAX_DISPLAY_Y
 
+file_header_struct = struct.Struct("<7sHBBB")
 frame_header_struct = struct.Struct(f"<II")
 logger = logging.getLogger(__name__)
 
@@ -138,6 +140,19 @@ def main(args: Args):
 
     frames = []
     with open(osd_path, "rb") as dump_f:
+        file_header_data = dump_f.read(file_header_struct.size)
+        file_header = file_header_struct.unpack(file_header_data)
+
+        if file_header[0] != b"MSPOSD\x00":
+            logger.critical("%s has an invalid file header", osd_path)
+            sys.exit(1)
+
+        logger.info("file header: %s", file_header[0].decode("ascii"))
+        logger.info("file version: %d", file_header[1])
+        logger.info("frame width: %d", file_header[2])
+        logger.info("frame height: %d", file_header[3])
+        logger.info("font variant: %d", file_header[4])
+
         while True:
             frame_header = dump_f.read(frame_header_struct.size)
             if len(frame_header) == 0:
