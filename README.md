@@ -7,7 +7,7 @@ Overlays msp-osd recordings over video files.
 - Python 3.10+ and Poetry are required.
 - Place font files and video files in this directory.
 
-```bash
+```
 $ poetry install
 $ poetry run python -m osd --help
 
