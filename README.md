@@ -21,6 +21,7 @@ options:
   --font FONT  font basename e.g. "font"
   --wide       is this a 16:9 video?
   --hd         is this an HD OSD recording?
+  --fakehd     are you using fakehd?
 
 $ poetry run python -m osd --font font_inav --hd --wide DJIG0001.mp4
 

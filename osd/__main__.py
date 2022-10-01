@@ -8,7 +8,7 @@ import pathlib
 import struct
 import sys
 import tempfile
-from typing import cast
+from typing import Sequence, cast
 
 import ffmpeg
 from PIL import Image
@@ -26,7 +26,7 @@ MAX_DISPLAY_Y = 22
 
 FRAME_SIZE = MAX_DISPLAY_X * MAX_DISPLAY_Y
 
-file_header_struct = struct.Struct("<7sHBBB")
+file_header_struct = struct.Struct("<7sH4B2HB")
 frame_header_struct = struct.Struct(f"<II")
 logger = logging.getLogger(__name__)
 
@@ -82,12 +82,19 @@ class Font:
 
 
 def draw_frame(
-    font: Font, frame, frame_index: int, is_hd: bool, wide: bool
+    font: Font,
+    frame: Sequence[int],
+    is_hd: bool,
+    is_wide: bool,
+    is_fake_hd: bool,
 ) -> Image.Image:
     internal_width = 60
     internal_height = 22
 
-    if is_hd:
+    if is_fake_hd:
+        display_width = 59
+        display_height = 22
+    elif is_hd:
         display_width = 50
         display_height = 18
     else:
@@ -97,8 +104,9 @@ def draw_frame(
     img = Image.new(
         "RGBA",
         (
-            display_width * (HD_TILE_WIDTH if is_hd else SD_TILE_WIDTH),
-            display_height * (HD_TILE_HEIGHT if is_hd else SD_TILE_HEIGHT),
+            display_width * (HD_TILE_WIDTH if is_hd or is_fake_hd else SD_TILE_WIDTH),
+            display_height
+            * (HD_TILE_HEIGHT if is_hd or is_fake_hd else SD_TILE_HEIGHT),
         ),
     )
 
@@ -109,16 +117,17 @@ def draw_frame(
             img.paste(
                 tile,
                 (
-                    x * (HD_TILE_WIDTH if is_hd else SD_TILE_WIDTH),
-                    y * (HD_TILE_HEIGHT if is_hd else SD_TILE_HEIGHT),
+                    x * (HD_TILE_WIDTH if is_hd or is_fake_hd else SD_TILE_WIDTH),
+                    y * (HD_TILE_HEIGHT if is_hd or is_fake_hd else SD_TILE_HEIGHT),
                 ),
             )
 
-    # info_str = f"{frame_index}i:{frame.idx}f"
-    # for i, char in enumerate(info_str):
-    #     img.paste(get_tile_from_font(font, ord(char)), (i * SD_TILE_WIDTH, 0))
+    if is_fake_hd or is_hd or is_wide:
+        img_size = (1280, 720)
+    else:
+        img_size = (960, 720)
 
-    img = img.resize((1280, 720) if wide else (960, 720), Image.Resampling.BICUBIC)
+    img = img.resize(img_size, Image.Resampling.BICUBIC)
 
     return img
 
@@ -126,7 +135,7 @@ def draw_frame(
 def main(args: Args):
     logging.basicConfig(level=logging.DEBUG)
 
-    if args.hd:
+    if args.hd or args.fakehd:
         font = Font(f"{args.font}_hd", is_hd=True)
     else:
         font = Font(args.font, is_hd=False)
@@ -149,9 +158,13 @@ def main(args: Args):
 
         logger.info("file header: %s", file_header[0].decode("ascii"))
         logger.info("file version: %d", file_header[1])
-        logger.info("frame width: %d", file_header[2])
-        logger.info("frame height: %d", file_header[3])
-        logger.info("font variant: %d", file_header[4])
+        logger.info("char width: %d", file_header[2])
+        logger.info("char height: %d", file_header[3])
+        logger.info("font widtht: %d", file_header[4])
+        logger.info("font height: %d", file_header[5])
+        logger.info("x offset: %d", file_header[6])
+        logger.info("y offset: %d", file_header[7])
+        logger.info("font variant: %d", file_header[8])
 
         while True:
             frame_header = dump_f.read(frame_header_struct.size)
@@ -167,11 +180,25 @@ def main(args: Args):
 
             frames.append(Frame(frame_idx, frame_size, frame_data))
 
+    draw_frame(
+        font=font,
+        frame=frames[-1],
+        is_hd=args.hd,
+        is_wide=args.wide,
+        is_fake_hd=args.fakehd,
+    ).save("test.png")
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         logger.info("rendering %d frames", len(frames))
 
         for i, frame in enumerate(frames):
-            osd_img = draw_frame(font, frame, i, args.hd, args.wide)
+            osd_img = draw_frame(
+                font=font,
+                frame=frame,
+                is_hd=args.hd,
+                is_wide=args.wide,
+                is_fake_hd=args.fakehd,
+            )
 
             osd_img.save(f"{tmp_dir}/{frame.idx:016}.png")
             if i < len(frames) - 1:
@@ -188,8 +215,16 @@ def main(args: Args):
             f"{tmp_dir}/*.png", pattern_type="glob", framerate=60
         )
         video = ffmpeg.input(video_path)
+
+        if args.fakehd or args.hd or args.wide:
+            out_size = {"w": 1280, "h": 720}
+        else:
+            out_size = {"w": 960, "h": 720}
+
         (
-            video.overlay(frame_overlay, x=0, y=0)
+            video.filter("scale", **out_size, force_original_aspect_ratio=1)
+            .filter("pad", **out_size, x=-1, y=-1, color="black")
+            .overlay(frame_overlay, x=0, y=0)
             .output(out_path)
             .run(overwrite_output=True)
         )
@@ -200,20 +235,30 @@ class Args(argparse.Namespace):
     hd: bool
     wide: bool
     video: str
+    fakehd: bool
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("video", type=str, help="video file e.g. DJIG0007.mp4")
     parser.add_argument(
         "--font", type=str, default="font", help='font basename e.g. "font"'
     )
     parser.add_argument(
         "--wide", action="store_true", default=False, help="is this a 16:9 video?"
     )
-    parser.add_argument(
+
+    hdivity = parser.add_mutually_exclusive_group()
+    hdivity.add_argument(
         "--hd", action="store_true", default=False, help="is this an HD OSD recording?"
     )
-    parser.add_argument("video", type=str, help="video file e.g. DJIG0007.mp4")
+    hdivity.add_argument(
+        "--fakehd",
+        action="store_true",
+        default=False,
+        help="are you using fake-hd in this recording?",
+    )
+
     args = cast(Args, parser.parse_args())
 
     main(args)
