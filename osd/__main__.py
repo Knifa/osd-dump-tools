@@ -212,9 +212,9 @@ def main(args: Args):
 
         # Overlay on top of the video (DJIG0007.mp4)
         frame_overlay = ffmpeg.input(
-            f"{tmp_dir}/*.png", pattern_type="glob", framerate=60
+            f"{tmp_dir}/%016d.png", framerate=60
         )
-        video = ffmpeg.input(video_path)
+        video = ffmpeg.input(str(video_path))
 
         if args.fakehd or args.hd or args.wide:
             out_size = {"w": 1280, "h": 720}
