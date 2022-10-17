@@ -18,7 +18,7 @@ source ./venv/bin/activate
 pip install -r requirements.txt
 
 # Check out the options.
-python -m osd_dump --help
+python -m osd --help
 
   usage: __main__.py [-h] [--font FONT] [--wide] [--hd] video
 
