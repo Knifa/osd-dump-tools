@@ -8,7 +8,7 @@ import pathlib
 import struct
 import sys
 import tempfile
-from typing import Sequence, cast
+from typing import Sequence, cast, Optional
 
 import ffmpeg
 from PIL import Image
@@ -92,7 +92,7 @@ def draw_frame(
     internal_height = 22
 
     if is_fake_hd:
-        display_width = 59
+        display_width = 60
         display_height = 22
     elif is_hd:
         display_width = 50
