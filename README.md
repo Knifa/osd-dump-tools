@@ -1,16 +1,13 @@
 # osd-dump tools
 
 Overlays msp-osd recordings over video files.
-
-## Usage
-
 ### Requirements
 
 - Windows users should [use WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 - Python 3.8+ is required.
 - ffmpeg is required.
 
-  ```console
+  ```shell
   # Debian and friends
   $ sudo apt install ffmpeg
 
@@ -18,9 +15,7 @@ Overlays msp-osd recordings over video files.
   $ brew install ffmpeg
   ```
 
-### Running
-
-- Place font files and video files in this directory.
+### Setup
 
 ```shell
 # Setting up a virtual environment is recommended, but not required.
@@ -29,7 +24,13 @@ source ./venv/bin/activate
 
 # Install dependencies.
 $ pip install -r requirements.txt
+```
 
+### Usage
+
+- Place font files and video files in this directory.
+
+```shell
 # Check out the options.
 $ python -m osd --help
 
