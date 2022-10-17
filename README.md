@@ -4,9 +4,22 @@ Overlays msp-osd recordings over video files.
 
 ## Usage
 
+### Requirements
+
+- Windows users should [use WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 - Python 3.8+ is required.
-- Windows users should [use WSL](https://learn.microsoft.com/en-us/windows/wsl/install)
-  where possible.
+- ffmpeg is required.
+
+  ```console
+  # Debian and friends
+  $ sudo apt install ffmpeg
+
+  # macOS
+  $ brew install ffmpeg
+  ```
+
+### Running
+
 - Place font files and video files in this directory.
 
 ```shell
@@ -15,10 +28,10 @@ python -m venv venv
 source ./venv/bin/activate
 
 # Install dependencies.
-pip install -r requirements.txt
+$ pip install -r requirements.txt
 
 # Check out the options.
-python -m osd --help
+$ python -m osd --help
 
   usage: __main__.py [-h] [--font FONT] [--wide] [--hd] video
 
@@ -33,7 +46,7 @@ python -m osd --help
     --fakehd     are you using fakehd?
 
 # Convert your recording!
-python -m osd --font font_inav --hd --wide DJIG0001.mp4
+$ python -m osd --font font_inav --hd --wide DJIG0001.mp4
 
   INFO:__main__:loading OSD dump from DJIG0001.osd
   INFO:__main__:rendering 168 frames
