@@ -5,6 +5,8 @@ Overlays msp-osd recordings over video files.
 ## Usage
 
 - Python 3.8+ is required.
+- Windows users should [use WSL](https://learn.microsoft.com/en-us/windows/wsl/install)
+  where possible.
 - Place font files and video files in this directory.
 
 ```shell
