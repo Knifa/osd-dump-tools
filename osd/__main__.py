@@ -225,7 +225,7 @@ def main(args: Args):
             video.filter("scale", **out_size, force_original_aspect_ratio=1)
             .filter("pad", **out_size, x=-1, y=-1, color="black")
             .overlay(frame_overlay, x=0, y=0)
-            .output(out_path)
+            .output(out_path, video_bitrate="25M")
             .run(overwrite_output=True)
         )
 
