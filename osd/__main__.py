@@ -142,7 +142,8 @@ def main(args: Args):
 
     video_path = pathlib.PurePath(args.video)
     video_stem = video_path.stem
-    osd_path = video_stem + ".osd"
+    #TODO: there is probably better way to do this
+    osd_path = str(video_path.parent) + '/' + video_stem + ".osd"
     out_path = video_stem + "_with_osd.mp4"
 
     logger.info("loading OSD dump from %s", osd_path)

@@ -3,7 +3,7 @@
 Overlays msp-osd recordings over video files.
 ### Requirements
 
-- Windows users should [use WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
+- Windows as describe below or [use WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 - Python 3.8+ is required.
 - ffmpeg is required.
 
@@ -15,6 +15,11 @@ Overlays msp-osd recordings over video files.
   $ brew install ffmpeg
   ```
 
+  # Windows
+  Download ffmpeg from https://github.com/BtbN/FFmpeg-Builds/releases
+  Extract to any folder on disk (i.e. c:\ffmpeg), add this folder to environment variable 'path'
+  To use tool you have to run priviledged cmd. Start-> search for cmd -> right click -> run as admin.
+  If you don't like to use elevated shell other solution is to use WSL.
 ### Setup
 
 ```shell
