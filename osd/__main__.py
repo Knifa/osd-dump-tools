@@ -212,7 +212,7 @@ def main(args: Args):
 
         # Overlay on top of the video (DJIG0007.mp4)
         frame_overlay = ffmpeg.input(
-            f"{tmp_dir}/%016d.png", framerate=60
+            f"{tmp_dir}/*.png", pattern_type="glob", framerate=60
         )
         video = ffmpeg.input(str(video_path))
 
@@ -253,10 +253,11 @@ if __name__ == "__main__":
         "--hd", action="store_true", default=False, help="is this an HD OSD recording?"
     )
     hdivity.add_argument(
+        "--fullhd",
         "--fakehd",
         action="store_true",
         default=False,
-        help="are you using fake-hd in this recording?",
+        help="are you using full-hd or fake-hd in this recording?",
     )
 
     args = cast(Args, parser.parse_args())

@@ -44,7 +44,7 @@ $ python -m osd --help
     --font FONT  font basename e.g. "font"
     --wide       is this a 16:9 video?
     --hd         is this an HD OSD recording?
-    --fakehd     are you using fakehd?
+    --fullhd     are you using full-hd or fake-hd in this recording?
 
 # Convert your recording!
 $ python -m osd --font font_inav --hd --wide DJIG0001.mp4
