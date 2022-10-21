@@ -253,8 +253,8 @@ if __name__ == "__main__":
         "--hd", action="store_true", default=False, help="is this an HD OSD recording?"
     )
     hdivity.add_argument(
-        "--fullhd",
         "--fakehd",
+        "--fullhd",
         action="store_true",
         default=False,
         help="are you using full-hd or fake-hd in this recording?",
