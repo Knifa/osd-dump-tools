@@ -80,6 +80,20 @@ class Font:
             )
         )
 
+class ExcludeArea:
+    def __init__(self, s: str):
+        nums = s.split(',')
+        if len(nums) != 4:
+            raise Exception('Incorrect no of region parameters, should be 4, received {len(nums)}.')
+
+        self.x1 = int(nums[0])
+        self.y1 = int(nums[1])
+        self.x2 = int(nums[2])
+        self.y2 = int(nums[3])
+
+    def is_excluded(self, x: int, y: int) -> bool:
+        return self.x1 <= x < self.x2 and self.y1 <= y < self.y2
+
 
 def draw_frame(
     font: Font,
@@ -87,6 +101,7 @@ def draw_frame(
     is_hd: bool,
     is_wide: bool,
     is_fake_hd: bool,
+    ignore_area: ExcludeArea,
 ) -> Image.Image:
     internal_width = 60
     internal_height = 22
@@ -112,6 +127,9 @@ def draw_frame(
 
     for y in range(internal_height):
         for x in range(internal_width):
+            if ignore_area.is_excluded(x, y):
+                continue
+
             char = frame.data[y + x * internal_height]
             tile = font[char]
             img.paste(
@@ -187,6 +205,7 @@ def main(args: Args):
         is_hd=args.hd,
         is_wide=args.wide,
         is_fake_hd=args.fakehd,
+        ignore_area=args.ignore_area
     ).save("test.png")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -199,6 +218,7 @@ def main(args: Args):
                 is_hd=args.hd,
                 is_wide=args.wide,
                 is_fake_hd=args.fakehd,
+                ignore_area=args.ignore_area
             )
 
             osd_img.save(f"{tmp_dir}/{frame.idx:016}.png")
@@ -226,10 +246,9 @@ def main(args: Args):
             video.filter("scale", **out_size, force_original_aspect_ratio=1)
             .filter("pad", **out_size, x=-1, y=-1, color="black")
             .overlay(frame_overlay, x=0, y=0)
-            .output(out_path, video_bitrate="25M")
+            .output(out_path, video_bitrate=f"{args.bitrate}M")
             .run(overwrite_output=True)
         )
-
 
 class Args(argparse.Namespace):
     font: str
@@ -237,6 +256,8 @@ class Args(argparse.Namespace):
     wide: bool
     video: str
     fakehd: bool
+    bitrate: int
+    ignore_area: ExcludeArea
 
 
 if __name__ == "__main__":
@@ -258,6 +279,12 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="are you using fake-hd in this recording?",
+    )
+    parser.add_argument(
+        "--bitrate", type=int, default="25", help='output bitrate, default 25mpbs'
+    )
+    parser.add_argument(
+        "--ignore_area", type=ExcludeArea, default="-1, -1, 0, 0", help="don't display area (in fonts, x1,y1,x2,y2), i.e. 10,10,15,15"
     )
 
     args = cast(Args, parser.parse_args())

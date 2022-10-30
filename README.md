@@ -45,11 +45,13 @@ $ python -m osd --help
     video        video file e.g. DJIG0007.mp4
 
   options:
-    -h, --help   show this help message and exit
-    --font FONT  font basename e.g. "font"
-    --wide       is this a 16:9 video?
-    --hd         is this an HD OSD recording?
-    --fakehd     are you using fakehd?
+    -h, --help    show this help message and exit
+    --font FONT   font basename e.g. "font"
+    --wide        is this a 16:9 video?
+    --hd          is this an HD OSD recording?
+    --fakehd      are you using fakehd?
+    -- bitrate    output bitrate, default is 25mbps
+    --ignore_area very useful option to hide GPS coords or altitude
 
 # Convert your recording!
 $ python -m osd --font font_inav --hd --wide DJIG0001.mp4

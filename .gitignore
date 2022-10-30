@@ -1,5 +1,7 @@
 __pycache__
+venv
 .venv
 *.mp4
 *.osd
 *.pyc
+.vscode
