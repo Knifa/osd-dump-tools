@@ -51,7 +51,7 @@ $ python -m osd --help
     --hd          is this an HD OSD recording?
     --fakehd      are you using fakehd?
     -- bitrate    output bitrate, default is 25mbps
-    --ignore_area very useful option to hide GPS coords or altitude
+    --ignore_area very useful option to hide GPS coords or altitude, can be repeated, parameters are top,left,right,bottom
 
 # Convert your recording!
 $ python -m osd --font font_inav --hd --wide DJIG0001.mp4

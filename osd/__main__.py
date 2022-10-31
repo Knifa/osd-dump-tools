@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import logging
+from operator import truediv
 import os
 import pathlib
 import struct
@@ -82,6 +83,7 @@ class Font:
 
 class ExcludeArea:
     def __init__(self, s: str):
+
         nums = s.split(',')
         if len(nums) != 4:
             raise Exception('Incorrect no of region parameters, should be 4, received {len(nums)}.')
@@ -94,6 +96,21 @@ class ExcludeArea:
     def is_excluded(self, x: int, y: int) -> bool:
         return self.x1 <= x < self.x2 and self.y1 <= y < self.y2
 
+class MultiExcludedAreas:
+    excluded_areas = []
+
+    def __init__(self, s: str):
+        a = ExcludeArea(s)
+        self.excluded_areas.append(a)
+
+    def is_excluded(self, x: int, y: int) -> bool:
+        for area in self.excluded_areas:
+            if area.is_excluded(x, y):
+                return True
+
+        return False
+    
+
 
 def draw_frame(
     font: Font,
@@ -101,7 +118,7 @@ def draw_frame(
     is_hd: bool,
     is_wide: bool,
     is_fake_hd: bool,
-    ignore_area: ExcludeArea,
+    ignore_area: MultiExcludedAreas,
 ) -> Image.Image:
     internal_width = 60
     internal_height = 22
@@ -257,7 +274,7 @@ class Args(argparse.Namespace):
     video: str
     fakehd: bool
     bitrate: int
-    ignore_area: ExcludeArea
+    ignore_area: MultiExcludedAreas
 
 
 if __name__ == "__main__":
@@ -284,7 +301,7 @@ if __name__ == "__main__":
         "--bitrate", type=int, default="25", help='output bitrate, default 25mpbs'
     )
     parser.add_argument(
-        "--ignore_area", type=ExcludeArea, default="-1, -1, 0, 0", help="don't display area (in fonts, x1,y1,x2,y2), i.e. 10,10,15,15"
+        "--ignore_area", type=MultiExcludedAreas, default="-1, -1, 0, 0", help="don't display area (in fonts, x1,y1,x2,y2), i.e. 10,10,15,15, can be repeated"
     )
 
     args = cast(Args, parser.parse_args())
