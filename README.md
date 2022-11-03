@@ -19,7 +19,8 @@ Overlays msp-osd recordings over video files.
   Download ffmpeg from https://github.com/BtbN/FFmpeg-Builds/releases
   Extract to any folder on disk (i.e. c:\ffmpeg), add this folder to environment variable 'path'
   To use tool you have to run priviledged cmd. Start-> search for cmd -> right click -> run as admin.
-  If you don't like to use elevated shell other solution is to use WSL.
+  If you don't like to use elevated shell you can use --nolinks option other solution is to use WSL.
+  --nolinks option consume more disk space as instead of linking files there are created on disk.
 ### Setup
 
 ```shell
@@ -33,7 +34,7 @@ $ pip install -r requirements.txt
 
 ### Usage
 
-- Place font files and video files in this directory.
+- Place font files in standard directory and use --font to set fonts location. Osd and video files should be in same directory.
 
 ```shell
 # Check out the options.
@@ -50,8 +51,14 @@ $ python -m osd --help
     --wide        is this a 16:9 video?
     --hd          is this an HD OSD recording?
     --fakehd      are you using fakehd?
-    -- bitrate    output bitrate, default is 25mbps
-    --ignore_area very useful option to hide GPS coords or altitude, can be repeated, parameters are top,left,right,bottom
+    --bitrate     output bitrate, default is 25mbps
+    --ignore_area very useful option to hide GPS coords or altitude, can be repeated, parameters are top,left,right,bottom i.e. '--ignore_area 5,5,15,15 3,3,5,5'
+    --hq          render output files with high quality as described here https://ffmpeg.org/faq.html#Which-are-good-parameters-for-encoding-high-quality-MPEG_002d4_003f
+    --testrun     creates overlay image in video directory, very useful to test --ignore_area option, ignoread areas are marked with X
+    --testframe   use frame no from osd file to test data, useful if default frame displays something else than normal osd (like flight summary)
+
+# Config file
+All parameters can be set in ini file located in osd folder. Parameters can be overriden by ini file in current directory.
 
 # Convert your recording!
 $ python -m osd --font font_inav --hd --wide DJIG0001.mp4

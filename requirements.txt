@@ -1,2 +1,5 @@
 Pillow==9.2.0
 ffmpeg-python==0.2.0
+colorama==0.4.6
+tqdm==4.64.1
+
