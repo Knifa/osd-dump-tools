@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import inspect
 import argparse
-import dataclasses
 import logging
-#from operator import truediv
 import os
 import pathlib
 import struct
 import sys
 import tempfile
-from typing import Any, Sequence, cast #, Optional
 from configparser import ConfigParser
 
 import ffmpeg
@@ -19,7 +15,7 @@ from PIL import Image
 
 from tqdm import tqdm
 
-DEFAULT_SECTION='DEFAULT'
+DEFAULT_SECTION = 'DEFAULT'
 
 SD_TILE_WIDTH = 12 * 3
 SD_TILE_HEIGHT = 18 * 3
@@ -37,11 +33,11 @@ FRAME_SIZE = MAX_DISPLAY_X * MAX_DISPLAY_Y
 CONFIG_FILE_NAME = 'osd-dump-tools.ini'
 
 file_header_struct = struct.Struct("<7sH4B2HB")
-frame_header_struct = struct.Struct(f"<II")
+frame_header_struct = struct.Struct("<II")
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
+@dataclass
 class Frame:
     idx: int
     size: int
@@ -90,6 +86,7 @@ class Font:
             )
         )
 
+
 class ExcludeArea:
     def __init__(self, s: str):
 
@@ -104,6 +101,7 @@ class ExcludeArea:
 
     def is_excluded(self, x: int, y: int) -> bool:
         return self.x1 <= x < self.x2 and self.y1 <= y < self.y2
+
 
 class MultiExcludedAreas:
     def __init__(self):
@@ -123,24 +121,29 @@ class MultiExcludedAreas:
         except TypeError:
             self.excluded_areas.append(params)
 
+
 class Config:
     params: tuple[tuple[str, type]] = (
-        ('font', str), ('hd', bool), ('wide', bool), ('fakehd', bool), ('bitrate', int), 
+        ('font', str), ('hd', bool), ('wide', bool), ('fakehd', bool), ('bitrate', int),
         ('nolinks', bool), ('testrun', bool), ('testframe', int), ('hq', bool),
     )
 
     def __init__(self, cfg: ConfigParser):
         super().__init__()
 
+        self.font : str = ''
+        self.wide: bool = False
+        self.fakehd: bool = False
+        self.bitrate: int = 25
+        self.nolinks: bool = False
+        self.testrun: bool = False
+        self.testframe: int = -1
+        self.hd: bool = False
+        self.hq: bool = False
+
         self.exclude_area = MultiExcludedAreas()
-        self.build_values()
 
         self.update_cfg(cfg[DEFAULT_SECTION])
-            
-
-    def build_values(self) -> None:
-        for name, typ in self.params:
-            setattr(self, name, typ())
 
     def set_value_from_cfg(self, cfg: ConfigParser, name: str, t: type) -> None:
         try:
@@ -173,6 +176,7 @@ class Config:
         # merge regions
         self.exclude_area.merge(args.ignore_area)
 
+
 def build_cmd_line_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
 
@@ -181,7 +185,7 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
         "--font", type=str, default=None, help='font basename e.g. "font"'
     )
     parser.add_argument(
-        "--wide", action="store_true", default=False, help="is this a 16:9 video?"
+        "--wide", action="store_true", default=None, help="is this a 16:9 video?"
     )
 
     parser.add_argument(
@@ -195,7 +199,7 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--hq", action="store_true", default=False, help="render with high quality profile (slower)"
+        "--hq", action="store_true", default=None, help="render with high quality profile (slower)"
     )
 
     parser.add_argument(
@@ -208,13 +212,13 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
 
     hdivity = parser.add_mutually_exclusive_group()
     hdivity.add_argument(
-        "--hd", action="store_true", default=False, help="is this an HD OSD recording?"
+        "--hd", action="store_true", default=None, help="is this an HD OSD recording?"
     )
     hdivity.add_argument(
         "--fakehd",
         "--fullhd",
         action="store_true",
-        default=False,
+        default=None,
         help="are you using full-hd or fake-hd in this recording?",
     )
 
@@ -257,7 +261,7 @@ def draw_frame(
                 font_no = ord(' ')
                 if args.testrun:
                     font_no = ord('X')
-                
+
                 tile = font[font_no]
 
             # tile = font[char]
@@ -305,8 +309,8 @@ def read_osd_frames(osd_path: pathlib.PurePath) -> list[Frame]:
             if len(frame_header) == 0:
                 break
 
-            frame_header = frame_header_struct.unpack(frame_header)
-            frame_idx, frame_size = frame_header
+            frame_head = frame_header_struct.unpack(frame_header)
+            frame_idx, frame_size = frame_head
 
             frame_data_struct = struct.Struct(f"<{frame_size}H")
             frame_data = dump_f.read(frame_data_struct.size)
@@ -319,7 +323,7 @@ def read_osd_frames(osd_path: pathlib.PurePath) -> list[Frame]:
 
 def main(args: Config):
     logging.basicConfig(level=logging.DEBUG)
-    
+
     logger.info(f"loading fonts from {args.font}")
 
     if args.hd or args.fakehd:
@@ -329,8 +333,9 @@ def main(args: Config):
 
     video_path = pathlib.PurePath(args.video)
     video_stem = video_path.stem
-    osd_path = video_path.with_suffix('.osd')   
+    osd_path = video_path.with_suffix('.osd')
     out_path = video_path.with_name(video_stem + "_with_osd.mp4")
+
 
     logger.info("loading OSD dump from %s", osd_path)
 
@@ -375,13 +380,7 @@ def main(args: Config):
         # frame_overlay = ffmpeg.input(
         #     f"{tmp_dir}/*.png", pattern_type="glob", framerate=60
         # )
-        frame_overlay = ffmpeg.input(
-            f"{tmp_dir}/%016d.png", start_number=start_number, framerate=60
-        )
-        # frame_overlay = ffmpeg.input(
-        #     filter_complex_script='input.txt', framerate=60
-        # )
-        # video = ffmpeg.input(str(video_path), thread_queue_size=1024)
+        frame_overlay = ffmpeg.input(f"{tmp_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=1024)
         video = ffmpeg.input(str(video_path), thread_queue_size=1024)
 
         if args.fakehd or args.hd or args.wide:
@@ -415,8 +414,6 @@ def main(args: Config):
             .output(str(out_path), **output_params)
             .run(overwrite_output=True)
         )
-
-
 
 
 if __name__ == "__main__":
