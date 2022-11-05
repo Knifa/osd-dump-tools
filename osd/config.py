@@ -4,7 +4,15 @@ from configparser import ConfigParser
 from .const import *
 
 class ExcludeArea:
-    def __init__(self, s: str):
+    def __init__(self, s: str = None):
+
+        if not s:
+            self.x1 = -1
+            self.y1 = -1
+            self.x2 = -1
+            self.y2 = -1
+
+            return
 
         nums = s.split(',')
         if len(nums) != 4:
@@ -41,6 +49,7 @@ class Config:
     params: tuple[tuple[str, type]] = (
         ('font', str), ('hd', bool), ('wide', bool), ('fakehd', bool), ('bitrate', int),
         ('nolinks', bool), ('testrun', bool), ('testframe', int), ('hq', bool),
+        ('hide_gps', bool), ('hide_alt', bool),
     )
 
     def __init__(self, cfg: ConfigParser):
@@ -55,6 +64,8 @@ class Config:
         self.testframe: int = -1
         self.hd: bool = False
         self.hq: bool = False
+        self.hide_gps: bool = False
+        self.hide_alt: bool = False
 
         self.exclude_area = MultiExcludedAreas()
 

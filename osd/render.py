@@ -4,16 +4,23 @@ from PIL import Image
 from .const import *
 from .font import Font
 from .frame import Frame
-from .config import Config
+from .config import Config, ExcludeArea
 
-def draw_frame(font: Font, frame: Frame, args: Config) -> Image.Image:
+LAT_CHAR_CODE = 3
+LON_CHAR_CODE = 4
+ALT_CHAR_CODE = 118
+
+ALT_LEN = 4
+GPS_LEN = 9
+
+def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
     internal_width = 60
     internal_height = 22
 
-    if args.fakehd:
+    if cfg.fakehd:
         display_width = 60
         display_height = 22
-    elif args.hd:
+    elif cfg.hd:
         display_width = 50
         display_height = 18
     else:
@@ -23,45 +30,67 @@ def draw_frame(font: Font, frame: Frame, args: Config) -> Image.Image:
     img = Image.new(
         "RGBA",
         (
-            display_width * (HD_TILE_WIDTH if args.hd or args.fakehd else SD_TILE_WIDTH),
+            display_width * (HD_TILE_WIDTH if cfg.hd or cfg.fakehd else SD_TILE_WIDTH),
             display_height
-            * (HD_TILE_HEIGHT if args.hd or args.fakehd else SD_TILE_HEIGHT),
+            * (HD_TILE_HEIGHT if cfg.hd or cfg.fakehd else SD_TILE_HEIGHT),
         ),
     )
+
+    gps_lat: tuple[int, int] = None
+    gps_lon: tuple[int, int] = None
+    alt: tuple[int, int] = None
+    tile_width = (HD_TILE_WIDTH if cfg.hd or cfg.fakehd else SD_TILE_WIDTH)
+    tile_height = (HD_TILE_HEIGHT if cfg.hd or cfg.fakehd else SD_TILE_HEIGHT)
 
     for y in range(internal_height):
         for x in range(internal_width):
             char = frame.data[y + x * internal_height]
             tile = font[char]
 
-            if args.exclude_area.is_excluded(x, y):
+            if cfg.exclude_area.is_excluded(x, y):
                 font_no = ord(' ')
-                if args.testrun:
+                if cfg.testrun:
                     font_no = ord('X')
 
                 tile = font[font_no]
 
-            # if char == 3:
-            #     tile = font[ord('Y')]
-            # if char == 4:
-            #     tile = font[ord('Z')]
-            # if char == 118:
-            #     tile = font[ord('A')]
-            # tile = font[char]
-            img.paste(
-                tile,
-                (
-                    x * (HD_TILE_WIDTH if args.hd or args.fakehd else SD_TILE_WIDTH),
-                    y * (HD_TILE_HEIGHT if args.hd or args.fakehd else SD_TILE_HEIGHT),
-                ),
-            )
+            if cfg.hide_gps:
+                if char == LAT_CHAR_CODE:
+                    gps_lat = (x, y)
+                elif char == LON_CHAR_CODE:
+                    gps_lon = (x, y)
 
-    if args.fakehd or args.hd or args.wide:
+            if cfg.hide_alt and char == ALT_CHAR_CODE:
+                alt = (x, y)
+
+            img.paste(tile, (x * tile_width, y * tile_height,), )
+
+
+    # hide gps/alt data
+    if gps_lat and gps_lon:
+        tile = font[0]
+        for i in range(GPS_LEN + 1):
+            x = (gps_lat[0] + i) * tile_width
+            y = gps_lat[1] * tile_height
+            img.paste(tile, (x , y,), )
+            x = (gps_lon[0] + i) * tile_width
+            y = gps_lon[1] * tile_height
+            img.paste(tile, (x , y,), )
+
+    if alt:
+        tile = font[0]
+        for i in range(ALT_LEN + 1):
+            x = (alt[0] - i) * tile_width
+            y = alt[1] * tile_height
+            img.paste(tile, (x , y,), )
+
+    if cfg.fakehd or cfg.hd or cfg.wide:
         img_size = (1280, 720)
     else:
         img_size = (960, 720)
 
     img = img.resize(img_size, Image.Resampling.BICUBIC)
+
 
     return img
 
@@ -71,7 +100,7 @@ def render_single_frame(font: Font, tmp_dir: str, cfg: Config, frame: Frame) -> 
     osd_img = draw_frame(
         font=font,
         frame=frame,
-        args=cfg
+        cfg=cfg
     )
 
     fname = f"{tmp_dir}/{frame.idx:016}.png"
@@ -88,7 +117,3 @@ def render_single_frame(font: Font, tmp_dir: str, cfg: Config, frame: Frame) -> 
                 os.symlink(fname, lfname)
 
     return frame.idx
-
-def f_test(n, frame):
-    print(f'frame idx: {frame.idx} n={n}', flush=True)
-    return f'frame idx: {frame.idx}'

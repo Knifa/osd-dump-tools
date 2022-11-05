@@ -52,6 +52,14 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--hide_gps", action="store_true", default=None, help="Don't render GPS coords"
+    )
+
+    parser.add_argument(
+        "--hide_alt", action="store_true", default=None, help="Don't render GPS coords"
+    )
+
+    parser.add_argument(
         "--testrun", action="store_true", default=False, help="Create overlay with osd data in video location and ends"
     )
 
@@ -63,6 +71,7 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
     hdivity.add_argument(
         "--hd", action="store_true", default=None, help="is this an HD OSD recording?"
     )
+ 
     hdivity.add_argument(
         "--fakehd",
         "--fullhd",
@@ -118,18 +127,12 @@ def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config) ->
     logger.info("rendering %d frames", len(frames))
 
     renderer = partial(render_single_frame, font, tmp_dir, cfg)
-    #f_test2 = partial(f_test, 42)
-
-    #f_test2(frames[0])
 
     with Pool() as pool:
         queue = pool.imap_unordered(renderer, tqdm(frames))
 
         for _ in queue:
             pass
-    # for frame in tqdm(frames):
-    #     renderer(frame)
-
 
 
 def main(args: Config):
@@ -157,7 +160,7 @@ def main(args: Config):
         draw_frame(
             font=font,
             frame=frames[args.testframe],
-            args=args
+            cfg=args
         ).save(test_path)
 
         return
@@ -167,11 +170,9 @@ def main(args: Config):
 
         logger.info("passing to ffmpeg, out as %s", out_path)
 
-        return
-
         start_number = frames[0].idx
         frame_overlay = ffmpeg.input(f"{tmp_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=1024)
-        video = ffmpeg.input(str(video_path), thread_queue_size=1024)
+        video = ffmpeg.input(str(video_path), thread_queue_size=2048)
 
         if args.fakehd or args.hd or args.wide:
             out_size = {"w": 1280, "h": 720}
@@ -182,14 +183,15 @@ def main(args: Config):
             'video_bitrate': f"{args.bitrate}M",
         }
 
-        hq_output = {
+        # from https://ffmpeg.org/faq.html#Which-are-good-parameters-for-encoding-high-quality-MPEG_002d4_003f
+        hq_output = {           
             'mbd': 'rd',
             'flags': '+mv4+aic',
             'trellis': 2,
             'cmp': 2,
             'subcmp': 2,
             'g': 300,
-            'pass': '1/2',
+            'bf': 2,
         }
 
         if args.hq:
@@ -200,6 +202,9 @@ def main(args: Config):
             .filter("pad", **out_size, x=-1, y=-1, color="black")
             .overlay(frame_overlay, x=0, y=0)
             .output(str(out_path), **output_params)
+            .global_args('-loglevel', 'error')
+            .global_args('-stats' )
+            .global_args('-hide_banner')
             .run(overwrite_output=True)
         )
 

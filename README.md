@@ -56,6 +56,8 @@ $ python -m osd --help
     --hq          render output files with high quality as described here https://ffmpeg.org/faq.html#Which-are-good-parameters-for-encoding-high-quality-MPEG_002d4_003f
     --testrun     creates overlay image in video directory, very useful to test --ignore_area option, ignoread areas are marked with X
     --testframe   use frame no from osd file to test data, useful if default frame displays something else than normal osd (like flight summary)
+    --hide_gps    automatically hides gps coordinates from video (works for iNav, not tested on ArduPilot)
+    --hide_alt    automatically hides altitude (works for iNav, not tested on ArduPilot)
 
 # Config file
 All parameters can be set in ini file located in osd folder. Parameters can be overriden by ini file in current directory.
