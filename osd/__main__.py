@@ -15,16 +15,17 @@ import ffmpeg
 
 from tqdm import tqdm
 
-from .render import *
+from .render import draw_frame, render_single_frame
 from .frame import Frame
 from .font import Font
-from .const import *
+from .const import CONFIG_FILE_NAME
 from .config import Config, ExcludeArea
 
 
 file_header_struct = struct.Struct("<7sH4B2HB")
 frame_header_struct = struct.Struct("<II")
 logger = logging.getLogger(__name__)
+
 
 def build_cmd_line_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -71,7 +72,7 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
     hdivity.add_argument(
         "--hd", action="store_true", default=None, help="is this an HD OSD recording?"
     )
- 
+
     hdivity.add_argument(
         "--fakehd",
         "--fullhd",
@@ -82,8 +83,9 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
 
     return parser
 
+
 def read_osd_frames(osd_path: pathlib.Path) -> list[Frame]:
-    frames = []
+    frames: list[Frame] = []
 
     with open(osd_path, "rb") as dump_f:
         file_header_data = dump_f.read(file_header_struct.size)
@@ -135,6 +137,45 @@ def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config) ->
             pass
 
 
+def run_ffmpeg(start_number: int, bitrate: int, image_dir: str, video_path: pathlib.Path, out_path: pathlib.Path):
+    frame_overlay = ffmpeg.input(f"{image_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=1024)
+    video = ffmpeg.input(str(video_path), thread_queue_size=2048)
+
+    if args.fakehd or args.hd or args.wide:
+        out_size = {"w": 1280, "h": 720}
+    else:
+        out_size = {"w": 960, "h": 720}
+
+    output_params = {
+        'video_bitrate': f"{bitrate}M",
+    }
+
+    # from https://ffmpeg.org/faq.html#Which-are-good-parameters-for-encoding-high-quality-MPEG_002d4_003f
+    hq_output = {
+        'mbd': 'rd',
+        'flags': '+mv4+aic',
+        'trellis': 2,
+        'cmp': 2,
+        'subcmp': 2,
+        'g': 300,
+        'bf': 2,
+    }
+
+    if args.hq:
+        output_params.update(hq_output)
+
+    (
+        video.filter("scale", **out_size, force_original_aspect_ratio=1)
+        .filter("pad", **out_size, x=-1, y=-1, color="black")
+        .overlay(frame_overlay, x=0, y=0)
+        .output(str(out_path), **output_params)
+        .global_args('-loglevel', 'error')
+        .global_args('-stats')
+        .global_args('-hide_banner')
+        .run(overwrite_output=True)
+    )
+
+
 def main(args: Config):
     logging.basicConfig(level=logging.DEBUG)
 
@@ -149,7 +190,6 @@ def main(args: Config):
     video_stem = video_path.stem
     osd_path = video_path.with_suffix('.osd')
     out_path = video_path.with_name(video_stem + "_with_osd.mp4")
-
 
     logger.info("loading OSD dump from %s", osd_path)
 
@@ -171,42 +211,7 @@ def main(args: Config):
         logger.info("passing to ffmpeg, out as %s", out_path)
 
         start_number = frames[0].idx
-        frame_overlay = ffmpeg.input(f"{tmp_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=1024)
-        video = ffmpeg.input(str(video_path), thread_queue_size=2048)
-
-        if args.fakehd or args.hd or args.wide:
-            out_size = {"w": 1280, "h": 720}
-        else:
-            out_size = {"w": 960, "h": 720}
-
-        output_params = {
-            'video_bitrate': f"{args.bitrate}M",
-        }
-
-        # from https://ffmpeg.org/faq.html#Which-are-good-parameters-for-encoding-high-quality-MPEG_002d4_003f
-        hq_output = {           
-            'mbd': 'rd',
-            'flags': '+mv4+aic',
-            'trellis': 2,
-            'cmp': 2,
-            'subcmp': 2,
-            'g': 300,
-            'bf': 2,
-        }
-
-        if args.hq:
-            output_params.update(hq_output)
-
-        (
-            video.filter("scale", **out_size, force_original_aspect_ratio=1)
-            .filter("pad", **out_size, x=-1, y=-1, color="black")
-            .overlay(frame_overlay, x=0, y=0)
-            .output(str(out_path), **output_params)
-            .global_args('-loglevel', 'error')
-            .global_args('-stats' )
-            .global_args('-hide_banner')
-            .run(overwrite_output=True)
-        )
+        run_ffmpeg(start_number, args.bitrate, tmp_dir, video_path, out_path)
 
 
 if __name__ == "__main__":

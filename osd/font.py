@@ -1,5 +1,7 @@
 from PIL import Image
-from .const import *
+
+from .const import HD_TILE_WIDTH, SD_TILE_WIDTH, HD_TILE_HEIGHT, SD_TILE_HEIGHT, TILES_PER_PAGE
+
 
 class Font:
     def __init__(self, basename: str, is_hd: bool):
@@ -42,4 +44,3 @@ class Font:
                 + (HD_TILE_HEIGHT if self.is_hd else SD_TILE_HEIGHT),
             )
         )
-

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import argparse
 from configparser import ConfigParser
-from .const import *
+from .const import DEFAULT_SECTION
+
 
 class ExcludeArea:
     def __init__(self, s: str = None):
@@ -44,6 +46,7 @@ class MultiExcludedAreas:
                 self.excluded_areas.append(area)
         except TypeError:
             self.excluded_areas.append(params)
+
 
 class Config:
     params: tuple[tuple[str, type]] = (

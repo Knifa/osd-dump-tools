@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import os
 from PIL import Image
 
-from .const import *
+from .const import HD_TILE_WIDTH, SD_TILE_WIDTH, HD_TILE_HEIGHT, SD_TILE_HEIGHT
 from .font import Font
 from .frame import Frame
-from .config import Config, ExcludeArea
+from .config import Config
 
 LAT_CHAR_CODE = 3
 LON_CHAR_CODE = 4
@@ -12,6 +14,7 @@ ALT_CHAR_CODE = 118
 
 ALT_LEN = 4
 GPS_LEN = 9
+
 
 def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
     internal_width = 60
@@ -36,9 +39,9 @@ def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
         ),
     )
 
-    gps_lat: tuple[int, int] = None
-    gps_lon: tuple[int, int] = None
-    alt: tuple[int, int] = None
+    gps_lat: tuple[int, int] | None = None
+    gps_lon: tuple[int, int] | None = None
+    alt: tuple[int, int] | None = None
     tile_width = (HD_TILE_WIDTH if cfg.hd or cfg.fakehd else SD_TILE_WIDTH)
     tile_height = (HD_TILE_HEIGHT if cfg.hd or cfg.fakehd else SD_TILE_HEIGHT)
 
@@ -65,7 +68,6 @@ def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
 
             img.paste(tile, (x * tile_width, y * tile_height,), )
 
-
     # hide gps/alt data
     if gps_lat and gps_lon:
         tile = font[0]
@@ -91,12 +93,10 @@ def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
 
     img = img.resize(img_size, Image.Resampling.BICUBIC)
 
-
     return img
 
-def render_single_frame(font: Font, tmp_dir: str, cfg: Config, frame: Frame) -> None:
-    #print(f'dir {tmp_dir}, frame idx: {frame.idx}', flush=True)
 
+def render_single_frame(font: Font, tmp_dir: str, cfg: Config, frame: Frame) -> None:
     osd_img = draw_frame(
         font=font,
         frame=frame,
@@ -115,5 +115,3 @@ def render_single_frame(font: Font, tmp_dir: str, cfg: Config, frame: Frame) -> 
                 osd_img.save(lfname)
             else:
                 os.symlink(fname, lfname)
-
-    return frame.idx
