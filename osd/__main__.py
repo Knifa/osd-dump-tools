@@ -198,6 +198,7 @@ def main(args: Config):
 
     if args.testrun:
         test_path = str(video_path.with_name('test_image.png'))
+        print(f"test frame created: {test_path}")
         draw_frame(
             font=font,
             frame=frames[args.testframe],
