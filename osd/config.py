@@ -69,6 +69,7 @@ class Config:
         self.hq: bool = False
         self.hide_gps: bool = False
         self.hide_alt: bool = False
+        self.verbatim: bool = False
 
         self.exclude_area = MultiExcludedAreas()
 
