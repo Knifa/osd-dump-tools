@@ -3,7 +3,6 @@ from __future__ import annotations
 from functools import partial
 from multiprocessing import Pool
 import argparse
-import logging
 import os
 import pathlib
 import struct
@@ -24,7 +23,6 @@ from .config import Config, ExcludeArea
 
 file_header_struct = struct.Struct("<7sH4B2HB")
 frame_header_struct = struct.Struct("<II")
-logger = logging.getLogger(__name__)
 
 
 def build_cmd_line_parser() -> argparse.ArgumentParser:
@@ -53,11 +51,11 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--hide_gps", action="store_true", default=None, help="Don't render GPS coords"
+        "--hide_gps", action="store_true", default=None, help="Don't render GPS coords. Works on iNav."
     )
 
     parser.add_argument(
-        "--hide_alt", action="store_true", default=None, help="Don't render GPS coords"
+        "--hide_alt", action="store_true", default=None, help="Don't render GPS coords. Works on iNav."
     )
 
     parser.add_argument(
@@ -66,6 +64,10 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--testframe", type=int, default=-1, help="Osd data frame for testrun"
+    )
+
+    parser.add_argument(
+        "--verbatim", action="store_true", default=False, help="Display detailed information"
     )
 
     hdivity = parser.add_mutually_exclusive_group()
@@ -84,7 +86,7 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def read_osd_frames(osd_path: pathlib.Path) -> list[Frame]:
+def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Frame]:
     frames: list[Frame] = []
 
     with open(osd_path, "rb") as dump_f:
@@ -92,18 +94,19 @@ def read_osd_frames(osd_path: pathlib.Path) -> list[Frame]:
         file_header = file_header_struct.unpack(file_header_data)
 
         if file_header[0] != b"MSPOSD\x00":
-            logger.critical("%s has an invalid file header", osd_path)
+            print(f"{osd_path} has an invalid file header")
             sys.exit(1)
 
-        logger.info("file header: %s", file_header[0].decode("ascii"))
-        logger.info("file version: %d", file_header[1])
-        logger.info("char width: %d", file_header[2])
-        logger.info("char height: %d", file_header[3])
-        logger.info("font widtht: %d", file_header[4])
-        logger.info("font height: %d", file_header[5])
-        logger.info("x offset: %d", file_header[6])
-        logger.info("y offset: %d", file_header[7])
-        logger.info("font variant: %d", file_header[8])
+        if verbatim:
+            print(f"file header:    {file_header[0].decode('ascii')}")
+            print(f"file version:   {file_header[1]}")
+            print(f"char width:     {file_header[2]}")
+            print(f"char height:    {file_header[3]}")
+            print(f"font widtht:    {file_header[4]}")
+            print(f"font height:    {file_header[5]}")
+            print(f"x offset:       {file_header[6]}")
+            print(f"y offset:       {file_header[7]}")
+            print(f"font variant:   {file_header[8]}")
 
         while True:
             frame_header = dump_f.read(frame_header_struct.size)
@@ -126,7 +129,7 @@ def read_osd_frames(osd_path: pathlib.Path) -> list[Frame]:
 
 
 def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config) -> None:
-    logger.info("rendering %d frames", len(frames))
+    print(f"rendering {len(frames)} frames")
 
     renderer = partial(render_single_frame, font, tmp_dir, cfg)
 
@@ -169,7 +172,7 @@ def run_ffmpeg(start_number: int, bitrate: int, image_dir: str, video_path: path
         .filter("pad", **out_size, x=-1, y=-1, color="black")
         .overlay(frame_overlay, x=0, y=0)
         .output(str(out_path), **output_params)
-        .global_args('-loglevel', 'error')
+        .global_args('-loglevel', 'info' if args.verbatim else 'error')
         .global_args('-stats')
         .global_args('-hide_banner')
         .run(overwrite_output=True)
@@ -177,9 +180,7 @@ def run_ffmpeg(start_number: int, bitrate: int, image_dir: str, video_path: path
 
 
 def main(args: Config):
-    logging.basicConfig(level=logging.DEBUG)
-
-    logger.info(f"loading fonts from {args.font}")
+    print(f"loading fonts from: {args.font}")
 
     if args.hd or args.fakehd:
         font = Font(f"{args.font}_hd", is_hd=True)
@@ -191,9 +192,9 @@ def main(args: Config):
     osd_path = video_path.with_suffix('.osd')
     out_path = video_path.with_name(video_stem + "_with_osd.mp4")
 
-    logger.info("loading OSD dump from %s", osd_path)
+    print(f"loading OSD dump from:  {osd_path}")
 
-    frames = read_osd_frames(osd_path)
+    frames = read_osd_frames(osd_path, args.verbatim)
 
     if args.testrun:
         test_path = str(video_path.with_name('test_image.png'))
@@ -208,7 +209,7 @@ def main(args: Config):
     with tempfile.TemporaryDirectory() as tmp_dir:
         render_frames(frames, font, tmp_dir, args)
 
-        logger.info("passing to ffmpeg, out as %s", out_path)
+        print(f"passing to ffmpeg, out as {out_path}")
 
         start_number = frames[0].idx
         run_ffmpeg(start_number, args.bitrate, tmp_dir, video_path, out_path)
@@ -228,7 +229,7 @@ if __name__ == "__main__":
         import ctypes
         adm = ctypes.windll.shell32.IsUserAnAdmin()
         if not adm and not args.nolinks and not args.testrun:
-            logger.error('To run you need priviledged shell. Check --nolinks option. Terminating.')
+            print('To run you need priviledged shell. Check --nolinks option. Terminating.')
             sys.exit(1)
 
     main(args)
