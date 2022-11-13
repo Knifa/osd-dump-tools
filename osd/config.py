@@ -52,7 +52,7 @@ class Config:
     params: tuple[tuple[str, type]] = (
         ('font', str), ('hd', bool), ('wide', bool), ('fakehd', bool), ('bitrate', int),
         ('nolinks', bool), ('testrun', bool), ('testframe', int), ('hq', bool),
-        ('hide_gps', bool), ('hide_alt', bool),
+        ('hide_gps', bool), ('hide_alt', bool), ('verbatim', bool),
     )
 
     def __init__(self, cfg: ConfigParser):

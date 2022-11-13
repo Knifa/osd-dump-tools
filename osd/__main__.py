@@ -67,7 +67,7 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--verbatim", action="store_true", default=False, help="Display detailed information"
+        "--verbatim", action="store_true", default=None, help="Display detailed information"
     )
 
     hdivity = parser.add_mutually_exclusive_group()
