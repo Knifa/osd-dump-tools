@@ -70,6 +70,10 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
         "--verbatim", action="store_true", default=None, help="Display detailed information"
     )
 
+    # parser.add_argument(
+    #     "--singlecore", action="store_true", default=None, help="Run on single procesor core (slow)"
+    # )
+
     hdivity = parser.add_mutually_exclusive_group()
     hdivity.add_argument(
         "--hd", action="store_true", default=None, help="is this an HD OSD recording?"
@@ -120,6 +124,10 @@ def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Fram
             frame_data = dump_f.read(frame_data_struct.size)
             frame_data = frame_data_struct.unpack(frame_data)
 
+            if len(frames) > 0 and frames[-1].idx == frame_idx:
+                print(f'Duplicate frame: {frame_idx}')
+                continue
+
             if len(frames) > 0:
                 frames[-1].next_idx = frame_idx
 
@@ -132,6 +140,12 @@ def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config) ->
     print(f"rendering {len(frames)} frames")
 
     renderer = partial(render_single_frame, font, tmp_dir, cfg)
+
+    if cfg.singlecore:
+        for frame in frames:
+            renderer(frame)
+
+        return
 
     with Pool() as pool:
         queue = pool.imap_unordered(renderer, tqdm(frames))
