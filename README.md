@@ -25,8 +25,13 @@ Overlays msp-osd recordings over video files.
 
 ```shell
 # Setting up a virtual environment is recommended, but not required.
+# on linux or wsl
 python -m venv venv
 source ./venv/bin/activate
+
+# on windows
+python -m venv venv
+venv/scripts/activate
 
 # Install dependencies.
 $ pip install -r requirements.txt
