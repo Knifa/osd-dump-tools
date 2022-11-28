@@ -21,6 +21,8 @@ from .const import CONFIG_FILE_NAME
 from .config import Config, ExcludeArea
 
 
+MIN_START_FRAME_NO: int = 10
+
 file_header_struct = struct.Struct("<7sH4B2HB")
 frame_header_struct = struct.Struct("<II")
 
@@ -70,9 +72,9 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
         "--verbatim", action="store_true", default=None, help="Display detailed information"
     )
 
-    # parser.add_argument(
-    #     "--singlecore", action="store_true", default=None, help="Run on single procesor core (slow)"
-    # )
+    parser.add_argument(
+        "--singlecore", action="store_true", default=None, help="Run on single procesor core (slow)"
+    )
 
     hdivity = parser.add_mutually_exclusive_group()
     hdivity.add_argument(
@@ -124,6 +126,10 @@ def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Fram
             frame_data = dump_f.read(frame_data_struct.size)
             frame_data = frame_data_struct.unpack(frame_data)
 
+            if len(frames) == 0 and frame_idx > MIN_START_FRAME_NO:
+                print(f'Wrong idx of initial frame {frame_idx}, skipped')
+                continue
+
             if len(frames) > 0 and frames[-1].idx == frame_idx:
                 print(f'Duplicate frame: {frame_idx}')
                 continue
@@ -141,8 +147,13 @@ def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config) ->
 
     renderer = partial(render_single_frame, font, tmp_dir, cfg)
 
+    for i in range(len(frames)-1):
+        if frames[i].next_idx != frames[i+1].idx:
+            print(f'incorrect frame {frames[i].next_idx}')
+
+
     if cfg.singlecore:
-        for frame in frames:
+        for frame in tqdm(frames):
             renderer(frame)
 
         return

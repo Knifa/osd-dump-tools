@@ -113,7 +113,7 @@ def render_single_frame(font: Font, tmp_dir: str, cfg: Config, frame: Frame) -> 
     if next_frame_idx != 0:
         for j in range(frame.idx + 1, next_frame_idx):
             lfname = f"{tmp_dir}/{j:016}.png"
-            if Path(lfname).is_file and cfg.verbatim:
+            if Path(lfname).is_file() and cfg.verbatim:
                 print(f'File already exists: {lfname}, skipped')
                 continue
 
