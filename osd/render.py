@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
 from PIL import Image
 
 from .const import HD_TILE_WIDTH, SD_TILE_WIDTH, HD_TILE_HEIGHT, SD_TILE_HEIGHT
@@ -111,6 +113,10 @@ def render_single_frame(font: Font, tmp_dir: str, cfg: Config, frame: Frame) -> 
     if next_frame_idx != 0:
         for j in range(frame.idx + 1, next_frame_idx):
             lfname = f"{tmp_dir}/{j:016}.png"
+            if Path(lfname).is_file and cfg.verbatim:
+                print(f'File already exists: {lfname}, skipped')
+                continue
+
             if cfg.nolinks:
                 osd_img.save(lfname)
             else:
