@@ -21,7 +21,7 @@ from .const import CONFIG_FILE_NAME
 from .config import Config, ExcludeArea
 
 
-MIN_START_FRAME_NO: int = 10
+MIN_START_FRAME_NO: int = 20
 
 file_header_struct = struct.Struct("<7sH4B2HB")
 frame_header_struct = struct.Struct("<II")
@@ -91,6 +91,16 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
 
     return parser
 
+def get_min_frame_idx(frames: list[Frame]) -> int:
+    # frames idxes are in increasing order for most of time :)
+
+    for i in range(len(frames)):
+        n1 = frames[i].idx
+        n2 = frames[i+1].idx
+        if n1 < n2:
+            return n1
+
+    raise ValueError("Frames are in wrong order")
 
 def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Frame]:
     frames: list[Frame] = []
@@ -126,10 +136,6 @@ def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Fram
             frame_data = dump_f.read(frame_data_struct.size)
             frame_data = frame_data_struct.unpack(frame_data)
 
-            if len(frames) == 0 and frame_idx > MIN_START_FRAME_NO:
-                print(f'Wrong idx of initial frame {frame_idx}, skipped')
-                continue
-
             if len(frames) > 0 and frames[-1].idx == frame_idx:
                 print(f'Duplicate frame: {frame_idx}')
                 continue
@@ -139,7 +145,14 @@ def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Fram
 
             frames.append(Frame(frame_idx, 0, frame_size, frame_data))
 
-    return frames
+    # remove initial random frames
+    start_frame = get_min_frame_idx(frames)
+
+    if start_frame > MIN_START_FRAME_NO:
+        print(f'Wrong idx of initial frame {start_frame}, abort')
+        raise ValueError(f'Wrong idx of initial frame {frastart_framee_idx}, abort')
+
+    return frames[start_frame:]
 
 
 def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config) -> None:
