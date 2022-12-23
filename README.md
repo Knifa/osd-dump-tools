@@ -1,3 +1,11 @@
+# Hang on a minute!
+
+This might not be what you need.
+
+Give the [OSD Overlay Tool](https://knifa-develop.fpv.wtf/osd-overlay) a try first. It runs entirely in-browser on your own machine and will save you the effort of installing Python, etc.
+
+This will [become part of the official configurator](https://github.com/fpv-wtf/wtfos-configurator/pull/243) soon.
+
 # osd-dump tools
 
 Overlays msp-osd recordings over video files.
