@@ -1,265 +1,275 @@
 from __future__ import annotations
 
+from functools import partial
+from multiprocessing import Pool
 import argparse
-import dataclasses
-import logging
 import os
 import pathlib
 import struct
 import sys
 import tempfile
-from typing import Sequence, cast, Optional
+from configparser import ConfigParser
 
 import ffmpeg
-from PIL import Image
 
-SD_TILE_WIDTH = 12 * 3
-SD_TILE_HEIGHT = 18 * 3
+from tqdm import tqdm
 
-HD_TILE_WIDTH = 12 * 2
-HD_TILE_HEIGHT = 18 * 2
+from .render import draw_frame, render_single_frame
+from .frame import Frame
+from .font import Font
+from .const import CONFIG_FILE_NAME
+from .config import Config, ExcludeArea
 
-TILES_PER_PAGE = 256
 
-MAX_DISPLAY_X = 60
-MAX_DISPLAY_Y = 22
-
-FRAME_SIZE = MAX_DISPLAY_X * MAX_DISPLAY_Y
+MIN_START_FRAME_NO: int = 20
 
 file_header_struct = struct.Struct("<7sH4B2HB")
-frame_header_struct = struct.Struct(f"<II")
-logger = logging.getLogger(__name__)
+frame_header_struct = struct.Struct("<II")
 
 
-@dataclasses.dataclass
-class Frame:
-    idx: int
-    size: int
-    data: bytes
+def build_cmd_line_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser()
 
-
-class Font:
-    def __init__(self, basename: str, is_hd: bool):
-        self.basename = basename
-        self.is_hd = is_hd
-
-        self.img = self._load_pair(basename)
-
-    def _load_raw(self, path: str) -> Image.Image:
-        with open(path, "rb") as f:
-            data = f.read()
-            img = Image.frombytes(
-                "RGBA",
-                (
-                    HD_TILE_WIDTH if self.is_hd else SD_TILE_WIDTH,
-                    (HD_TILE_HEIGHT if self.is_hd else SD_TILE_HEIGHT) * TILES_PER_PAGE,
-                ),
-                data,
-            )
-
-        return img
-
-    def _load_pair(self, basename: str) -> Image.Image:
-        font_1 = self._load_raw(f"{basename}.bin")
-        font_2 = self._load_raw(f"{basename}_2.bin")
-
-        font = Image.new("RGBA", (font_1.width, font_1.height + font_2.height))
-        font.paste(font_1, (0, 0))
-        font.paste(font_2, (0, font_1.height))
-
-        return font
-
-    def __getitem__(self, key: int) -> Image.Image:
-        return self.img.crop(
-            (
-                0,
-                key * (HD_TILE_HEIGHT if self.is_hd else SD_TILE_HEIGHT),
-                HD_TILE_WIDTH if self.is_hd else SD_TILE_WIDTH,
-                key * ((HD_TILE_HEIGHT if self.is_hd else SD_TILE_HEIGHT))
-                + (HD_TILE_HEIGHT if self.is_hd else SD_TILE_HEIGHT),
-            )
-        )
-
-
-def draw_frame(
-    font: Font,
-    frame: Sequence[int],
-    is_hd: bool,
-    is_wide: bool,
-    is_fake_hd: bool,
-) -> Image.Image:
-    internal_width = 60
-    internal_height = 22
-
-    if is_fake_hd:
-        display_width = 60
-        display_height = 22
-    elif is_hd:
-        display_width = 50
-        display_height = 18
-    else:
-        display_width = 30
-        display_height = 15
-
-    img = Image.new(
-        "RGBA",
-        (
-            display_width * (HD_TILE_WIDTH if is_hd or is_fake_hd else SD_TILE_WIDTH),
-            display_height
-            * (HD_TILE_HEIGHT if is_hd or is_fake_hd else SD_TILE_HEIGHT),
-        ),
+    parser.add_argument("video", type=str, help="video file e.g. DJIG0007.mp4")
+    parser.add_argument(
+        "--font", type=str, default=None, help='font basename e.g. "font"'
+    )
+    parser.add_argument(
+        "--wide", action="store_true", default=None, help="is this a 16:9 video?"
     )
 
-    for y in range(internal_height):
-        for x in range(internal_width):
-            char = frame.data[y + x * internal_height]
-            tile = font[char]
-            img.paste(
-                tile,
-                (
-                    x * (HD_TILE_WIDTH if is_hd or is_fake_hd else SD_TILE_WIDTH),
-                    y * (HD_TILE_HEIGHT if is_hd or is_fake_hd else SD_TILE_HEIGHT),
-                ),
-            )
+    parser.add_argument(
+        "--bitrate", type=int, default=None, help='output bitrate'
+    )
+    parser.add_argument(
+        "--ignore_area", type=ExcludeArea, nargs='*', default="-1, -1, 0, 0", help="don't display area (in fonts, x1,y1,x2,y2), i.e. 10,10,15,15, can be repeated"
+    )
+    parser.add_argument(
+        "--nolinks", action="store_true", default=None, help="Copy frames instead of linking (windows without priviledged shell)"
+    )
 
-    if is_fake_hd or is_hd or is_wide:
-        img_size = (1280, 720)
-    else:
-        img_size = (960, 720)
+    parser.add_argument(
+        "--hq", action="store_true", default=None, help="render with high quality profile (slower)"
+    )
 
-    img = img.resize(img_size, Image.Resampling.BICUBIC)
+    parser.add_argument(
+        "--hide_gps", action="store_true", default=None, help="Don't render GPS coords. Works on iNav."
+    )
 
-    return img
+    parser.add_argument(
+        "--hide_alt", action="store_true", default=None, help="Don't render GPS coords. Works on iNav."
+    )
 
+    parser.add_argument(
+        "--testrun", action="store_true", default=False, help="Create overlay with osd data in video location and ends"
+    )
 
-def main(args: Args):
-    logging.basicConfig(level=logging.DEBUG)
+    parser.add_argument(
+        "--testframe", type=int, default=-1, help="Osd data frame for testrun"
+    )
 
-    if args.hd or args.fakehd:
-        font = Font(f"{args.font}_hd", is_hd=True)
-    else:
-        font = Font(args.font, is_hd=False)
+    parser.add_argument(
+        "--verbatim", action="store_true", default=None, help="Display detailed information"
+    )
 
-    video_path = pathlib.PurePath(args.video)
-    video_stem = video_path.stem
-    osd_path = video_stem + ".osd"
-    out_path = video_stem + "_with_osd.mp4"
+    parser.add_argument(
+        "--singlecore", action="store_true", default=None, help="Run on single procesor core (slow)"
+    )
 
-    logger.info("loading OSD dump from %s", osd_path)
+    hdivity = parser.add_mutually_exclusive_group()
+    hdivity.add_argument(
+        "--hd", action="store_true", default=None, help="is this an HD OSD recording?"
+    )
 
-    frames = []
+    hdivity.add_argument(
+        "--fakehd",
+        "--fullhd",
+        action="store_true",
+        default=None,
+        help="are you using full-hd or fake-hd in this recording?",
+    )
+
+    return parser
+
+def get_min_frame_idx(frames: list[Frame]) -> int:
+    # frames idxes are in increasing order for most of time :)
+
+    for i in range(len(frames)):
+        n1 = frames[i].idx
+        n2 = frames[i+1].idx
+        if n1 < n2:
+            return n1
+
+    raise ValueError("Frames are in wrong order")
+
+def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Frame]:
+    frames: list[Frame] = []
+
     with open(osd_path, "rb") as dump_f:
         file_header_data = dump_f.read(file_header_struct.size)
         file_header = file_header_struct.unpack(file_header_data)
 
         if file_header[0] != b"MSPOSD\x00":
-            logger.critical("%s has an invalid file header", osd_path)
+            print(f"{osd_path} has an invalid file header")
             sys.exit(1)
 
-        logger.info("file header: %s", file_header[0].decode("ascii"))
-        logger.info("file version: %d", file_header[1])
-        logger.info("char width: %d", file_header[2])
-        logger.info("char height: %d", file_header[3])
-        logger.info("font widtht: %d", file_header[4])
-        logger.info("font height: %d", file_header[5])
-        logger.info("x offset: %d", file_header[6])
-        logger.info("y offset: %d", file_header[7])
-        logger.info("font variant: %d", file_header[8])
+        if verbatim:
+            print(f"file header:    {file_header[0].decode('ascii')}")
+            print(f"file version:   {file_header[1]}")
+            print(f"char width:     {file_header[2]}")
+            print(f"char height:    {file_header[3]}")
+            print(f"font widtht:    {file_header[4]}")
+            print(f"font height:    {file_header[5]}")
+            print(f"x offset:       {file_header[6]}")
+            print(f"y offset:       {file_header[7]}")
+            print(f"font variant:   {file_header[8]}")
 
         while True:
             frame_header = dump_f.read(frame_header_struct.size)
             if len(frame_header) == 0:
                 break
 
-            frame_header = frame_header_struct.unpack(frame_header)
-            frame_idx, frame_size = frame_header
+            frame_head = frame_header_struct.unpack(frame_header)
+            frame_idx, frame_size = frame_head
 
             frame_data_struct = struct.Struct(f"<{frame_size}H")
             frame_data = dump_f.read(frame_data_struct.size)
             frame_data = frame_data_struct.unpack(frame_data)
 
-            frames.append(Frame(frame_idx, frame_size, frame_data))
+            if len(frames) > 0 and frames[-1].idx == frame_idx:
+                print(f'Duplicate frame: {frame_idx}')
+                continue
 
-    draw_frame(
-        font=font,
-        frame=frames[-1],
-        is_hd=args.hd,
-        is_wide=args.wide,
-        is_fake_hd=args.fakehd,
-    ).save("test.png")
+            if len(frames) > 0:
+                frames[-1].next_idx = frame_idx
+
+            frames.append(Frame(frame_idx, 0, frame_size, frame_data))
+
+    # remove initial random frames
+    start_frame = get_min_frame_idx(frames)
+
+    if start_frame > MIN_START_FRAME_NO:
+        print(f'Wrong idx of initial frame {start_frame}, abort')
+        raise ValueError(f'Wrong idx of initial frame {frastart_framee_idx}, abort')
+
+    return frames[start_frame:]
+
+
+def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config) -> None:
+    print(f"rendering {len(frames)} frames")
+
+    renderer = partial(render_single_frame, font, tmp_dir, cfg)
+
+    for i in range(len(frames)-1):
+        if frames[i].next_idx != frames[i+1].idx:
+            print(f'incorrect frame {frames[i].next_idx}')
+
+
+    if cfg.singlecore:
+        for frame in tqdm(frames):
+            renderer(frame)
+
+        return
+
+    with Pool() as pool:
+        queue = pool.imap_unordered(renderer, tqdm(frames))
+
+        for _ in queue:
+            pass
+
+
+def run_ffmpeg(start_number: int, bitrate: int, image_dir: str, video_path: pathlib.Path, out_path: pathlib.Path):
+    frame_overlay = ffmpeg.input(f"{image_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=1024)
+    video = ffmpeg.input(str(video_path), thread_queue_size=2048)
+
+    if args.fakehd or args.hd or args.wide:
+        out_size = {"w": 1280, "h": 720}
+    else:
+        out_size = {"w": 960, "h": 720}
+
+    output_params = {
+        'video_bitrate': f"{bitrate}M",
+    }
+
+    # from https://ffmpeg.org/faq.html#Which-are-good-parameters-for-encoding-high-quality-MPEG_002d4_003f
+    hq_output = {
+        'mbd': 'rd',
+        'flags': '+mv4+aic',
+        'trellis': 2,
+        'cmp': 2,
+        'subcmp': 2,
+        'g': 300,
+        'bf': 2,
+    }
+
+    if args.hq:
+        output_params.update(hq_output)
+
+    (
+        video.filter("scale", **out_size, force_original_aspect_ratio=1)
+        .filter("pad", **out_size, x=-1, y=-1, color="black")
+        .overlay(frame_overlay, x=0, y=0)
+        .output(str(out_path), **output_params)
+        .global_args('-loglevel', 'info' if args.verbatim else 'error')
+        .global_args('-stats')
+        .global_args('-hide_banner')
+        .run(overwrite_output=True)
+    )
+
+
+def main(args: Config):
+    print(f"loading fonts from: {args.font}")
+
+    if args.hd or args.fakehd:
+        font = Font(f"{args.font}_hd", is_hd=True)
+    else:
+        font = Font(args.font, is_hd=False)
+
+    video_path = pathlib.Path(args.video)
+    video_stem = video_path.stem
+    osd_path = video_path.with_suffix('.osd')
+    out_path = video_path.with_name(video_stem + "_with_osd.mp4")
+
+    print(f"verbatim:  {args.verbatim}")
+    print(f"loading OSD dump from:  {osd_path}")
+
+    frames = read_osd_frames(osd_path, args.verbatim)
+
+    if args.testrun:
+        test_path = str(video_path.with_name('test_image.png'))
+        print(f"test frame created: {test_path}")
+        draw_frame(
+            font=font,
+            frame=frames[args.testframe],
+            cfg=args
+        ).save(test_path)
+
+        return
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        logger.info("rendering %d frames", len(frames))
+        render_frames(frames, font, tmp_dir, args)
 
-        for i, frame in enumerate(frames):
-            osd_img = draw_frame(
-                font=font,
-                frame=frame,
-                is_hd=args.hd,
-                is_wide=args.wide,
-                is_fake_hd=args.fakehd,
-            )
+        print(f"passing to ffmpeg, out as {out_path}")
 
-            osd_img.save(f"{tmp_dir}/{frame.idx:016}.png")
-            if i < len(frames) - 1:
-                next_frame = frames[i + 1]
-                for j in range(frame.idx + 1, next_frame.idx):
-                    os.symlink(
-                        f"{tmp_dir}/{frame.idx:016}.png", f"{tmp_dir}/{j:016}.png"
-                    )
-
-        logger.info("passing to ffmpeg, out as %s", out_path)
-
-        # Overlay on top of the video (DJIG0007.mp4)
-        frame_overlay = ffmpeg.input(
-            f"{tmp_dir}/*.png", pattern_type="glob", framerate=60
-        )
-        video = ffmpeg.input(str(video_path))
-
-        if args.fakehd or args.hd or args.wide:
-            out_size = {"w": 1280, "h": 720}
-        else:
-            out_size = {"w": 960, "h": 720}
-
-        (
-            video.filter("scale", **out_size, force_original_aspect_ratio=1)
-            .filter("pad", **out_size, x=-1, y=-1, color="black")
-            .overlay(frame_overlay, x=0, y=0)
-            .output(out_path, video_bitrate="25M")
-            .run(overwrite_output=True)
-        )
-
-
-class Args(argparse.Namespace):
-    font: str
-    hd: bool
-    wide: bool
-    video: str
-    fakehd: bool
+        start_number = frames[0].idx
+        run_ffmpeg(start_number, args.bitrate, tmp_dir, video_path, out_path)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("video", type=str, help="video file e.g. DJIG0007.mp4")
-    parser.add_argument(
-        "--font", type=str, default="font", help='font basename e.g. "font"'
-    )
-    parser.add_argument(
-        "--wide", action="store_true", default=False, help="is this a 16:9 video?"
-    )
+    cfg = ConfigParser()
+    cfg.read(pathlib.PurePath(__file__).parent / CONFIG_FILE_NAME)
+    cfg.read(CONFIG_FILE_NAME)
 
-    hdivity = parser.add_mutually_exclusive_group()
-    hdivity.add_argument(
-        "--hd", action="store_true", default=False, help="is this an HD OSD recording?"
-    )
-    hdivity.add_argument(
-        "--fakehd",
-        "--fullhd",
-        action="store_true",
-        default=False,
-        help="are you using full-hd or fake-hd in this recording?",
-    )
+    parser = build_cmd_line_parser()
 
-    args = cast(Args, parser.parse_args())
+    args = Config(cfg)
+    args.merge_cfg(parser.parse_args())
+
+    if os.name == 'nt':
+        import ctypes
+        adm = ctypes.windll.shell32.IsUserAnAdmin()
+        if not adm and not args.nolinks and not args.testrun:
+            print('To run you need priviledged shell. Check --nolinks option. Terminating.')
+            sys.exit(1)
 
     main(args)
