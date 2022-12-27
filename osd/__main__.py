@@ -230,6 +230,7 @@ def main(args: Config):
     osd_path = video_path.with_suffix('.osd')
     out_path = video_path.with_name(video_stem + "_with_osd.mp4")
 
+    print(f"verbatim:  {args.verbatim}")
     print(f"loading OSD dump from:  {osd_path}")
 
     frames = read_osd_frames(osd_path, args.verbatim)

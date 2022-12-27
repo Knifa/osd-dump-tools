@@ -79,6 +79,9 @@ class Config:
     def set_value_from_cfg(self, cfg: ConfigParser, name: str, t: type) -> None:
         try:
             v = cfg[name]
+            if t == bool:   # we need special handling
+                v = v.lower() not in ('false', 'no', '0')
+                
             setattr(self, name, t(v))
         except KeyError:
             pass
