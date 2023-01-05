@@ -1,6 +1,10 @@
 # osd-dump tools
 
-Overlays msp-osd recordings over video files.
+Overlays msp-osd and walksnail recordings over video files.
+Walksnail is decoded automatically and rendered as full hd, same fonts as for dji are used.
+At this moment different firmwares doesn't select proper fonts. 
+Current walksnail limitation is only 60fps and anly full hd.
+
 ### Requirements
 
 - Windows as described below or [use WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
