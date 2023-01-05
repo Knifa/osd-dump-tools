@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from .const import HD_TILE_WIDTH, SD_TILE_WIDTH, HD_TILE_HEIGHT, SD_TILE_HEIGHT
+from .const import HD_TILE_WIDTH, SD_TILE_WIDTH, HD_TILE_HEIGHT, SD_TILE_HEIGHT, OSD_TYPE_DJI
 from .font import Font
 from .frame import Frame
 from .config import Config
@@ -17,12 +17,16 @@ ALT_CHAR_CODE = 118
 ALT_LEN = 4
 GPS_LEN = 9
 
+INTERNAL_W_H_DJI = (60, 22)
+INTERNAL_W_H_WS = (53, 20)
 
-def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
-    internal_width = 60
-    internal_height = 22
 
-    if cfg.fakehd:
+def _get_display_dims(cfg: Config, osd_type: int) -> tuple[int, int]:
+    # TODO: check for ws
+    if osd_type != OSD_TYPE_DJI:
+        display_width = 50
+        display_height = 18
+    elif cfg.fakehd:
         display_width = 60
         display_height = 22
     elif cfg.hd:
@@ -32,12 +36,22 @@ def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
         display_width = 30
         display_height = 15
 
+    return (display_width, display_height)
+
+
+def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type) -> Image.Image:
+    if osd_type == OSD_TYPE_DJI:
+        internal_width, internal_height = INTERNAL_W_H_DJI
+    else:
+        internal_width, internal_height = INTERNAL_W_H_WS
+
+    display_width, display_height = _get_display_dims(cfg, osd_type)
+
     img = Image.new(
         "RGBA",
         (
-            display_width * (HD_TILE_WIDTH if cfg.hd or cfg.fakehd else SD_TILE_WIDTH),
-            display_height
-            * (HD_TILE_HEIGHT if cfg.hd or cfg.fakehd else SD_TILE_HEIGHT),
+            display_width  * (HD_TILE_WIDTH  if cfg.hd or cfg.fakehd else SD_TILE_WIDTH),
+            display_height * (HD_TILE_HEIGHT if cfg.hd or cfg.fakehd else SD_TILE_HEIGHT),
         ),
     )
 
@@ -49,7 +63,10 @@ def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
 
     for y in range(internal_height):
         for x in range(internal_width):
-            char = frame.data[y + x * internal_height]
+            if osd_type == OSD_TYPE_DJI:
+                char = frame.data[y + x * internal_height]
+            else:
+                char = frame.data[x + y * internal_width]
             tile = font[char]
 
             if cfg.exclude_area.is_excluded(x, y):
@@ -88,7 +105,9 @@ def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
             y = alt[1] * tile_height
             img.paste(tile, (x , y,), )
 
-    if cfg.fakehd or cfg.hd or cfg.wide:
+    if osd_type != OSD_TYPE_DJI:
+        img_size = (1920, 1080)
+    elif cfg.fakehd or cfg.hd or cfg.wide:
         img_size = (1280, 720)
     else:
         img_size = (960, 720)
@@ -98,11 +117,12 @@ def draw_frame(font: Font, frame: Frame, cfg: Config) -> Image.Image:
     return img
 
 
-def render_single_frame(font: Font, tmp_dir: str, cfg: Config, frame: Frame) -> None:
+def render_single_frame(font: Font, tmp_dir: str, cfg: Config, osd_type, frame: Frame) -> None:
     osd_img = draw_frame(
         font=font,
         frame=frame,
-        cfg=cfg
+        cfg=cfg,
+        osd_type=osd_type,
     )
 
     fname = f"{tmp_dir}/{frame.idx:016}.png"

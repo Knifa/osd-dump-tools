@@ -17,15 +17,38 @@ from tqdm import tqdm
 from .render import draw_frame, render_single_frame
 from .frame import Frame
 from .font import Font
-from .const import CONFIG_FILE_NAME
+from .const import CONFIG_FILE_NAME, OSD_TYPE_DJI, OSD_TYPE_WS, FW_ARDU, FW_INAV, FW_BETAFL, FW_UNKNOWN
 from .config import Config, ExcludeArea
 
 
 MIN_START_FRAME_NO: int = 20
+WS_VIDEO_FPS = 60
 
-file_header_struct = struct.Struct("<7sH4B2HB")
-frame_header_struct = struct.Struct("<II")
+file_header_struct_detect = struct.Struct("<4s")
+# < little-endian
+# 4s string
 
+file_header_struct_ws = struct.Struct("<4s36B")
+# < little-endian
+# 4s string
+# 36B unsigned char
+
+frame_header_struct_ws = struct.Struct("<L1060H")
+# < little-endian
+# L unsigned long
+# 1060H unsigned short
+
+file_header_struct_dji = struct.Struct("<7sH4B2HB") 
+# < little-endian
+# 7s string
+# H unsigned short
+# 4B unsigned char
+# 2H unsigned short
+# B unsigned char
+frame_header_struct_dji = struct.Struct("<II")
+# < little-endian
+# I unsigned int
+# I unsigned int
 
 def build_cmd_line_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
@@ -102,16 +125,64 @@ def get_min_frame_idx(frames: list[Frame]) -> int:
 
     raise ValueError("Frames are in wrong order")
 
-def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Frame]:
+def detect_system(osd_path: pathlib.Path, verbatim: bool = False) -> tuple :
+    with open(osd_path, "rb") as dump_f:
+        file_header_data = dump_f.read(file_header_struct_detect.size)
+        file_header = file_header_struct_detect.unpack(file_header_data)
+
+        if file_header[0] == b'MSPO':
+            return OSD_TYPE_DJI, FW_UNKNOWN
+        if file_header[0] == b'INAV':
+            return OSD_TYPE_WS, FW_INAV
+        if file_header[0] == b'BTFL':
+            return OSD_TYPE_WS, FW_BETAFL
+        if file_header[0] == b'ARDU':
+            return OSD_TYPE_WS, FW_ARDU
+
+        print(f"{osd_path} has an invalid file header")
+        sys.exit(1)
+
+
+
+def read_ws_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Frame]:
+    frames_per_ms = (1 / WS_VIDEO_FPS) * 1000
     frames: list[Frame] = []
 
     with open(osd_path, "rb") as dump_f:
-        file_header_data = dump_f.read(file_header_struct.size)
-        file_header = file_header_struct.unpack(file_header_data)
+        file_header_data = dump_f.read(file_header_struct_ws.size)
+        file_header = file_header_struct_ws.unpack(file_header_data)
 
-        if file_header[0] != b"MSPOSD\x00":
-            print(f"{osd_path} has an invalid file header")
-            sys.exit(1)
+        if verbatim:
+            print(f"system:    {file_header[0].decode('ascii')}")
+
+        while True:
+            frame_header = dump_f.read(frame_header_struct_ws.size)
+            if len(frame_header) == 0:
+                break
+
+            frame = frame_header_struct_ws.unpack(frame_header)
+            osd_time = frame[0]
+            frame_idx = int(osd_time // frames_per_ms)
+            frame_data = frame[1:]
+
+            if len(frames) > 0 and frames[-1].idx == frame_idx:
+                print(f'Duplicate frame: {frame_idx}')
+                continue
+
+            if len(frames) > 0:
+                frames[-1].next_idx = frame_idx
+
+            frames.append(Frame(frame_idx, 0, frame_header_struct_ws.size, frame_data))
+
+    return frames
+
+
+def read_dji_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Frame]:
+    frames: list[Frame] = []
+
+    with open(osd_path, "rb") as dump_f:
+        file_header_data = dump_f.read(file_header_struct_dji.size)
+        file_header = file_header_struct_dji.unpack(file_header_data)
 
         if verbatim:
             print(f"file header:    {file_header[0].decode('ascii')}")
@@ -125,11 +196,11 @@ def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Fram
             print(f"font variant:   {file_header[8]}")
 
         while True:
-            frame_header = dump_f.read(frame_header_struct.size)
+            frame_header = dump_f.read(frame_header_struct_dji.size)
             if len(frame_header) == 0:
                 break
 
-            frame_head = frame_header_struct.unpack(frame_header)
+            frame_head = frame_header_struct_dji.unpack(frame_header)
             frame_idx, frame_size = frame_head
 
             frame_data_struct = struct.Struct(f"<{frame_size}H")
@@ -150,15 +221,15 @@ def read_osd_frames(osd_path: pathlib.Path, verbatim: bool = False) -> list[Fram
 
     if start_frame > MIN_START_FRAME_NO:
         print(f'Wrong idx of initial frame {start_frame}, abort')
-        raise ValueError(f'Wrong idx of initial frame {frastart_framee_idx}, abort')
+        raise ValueError(f'Wrong idx of initial frame {start_frame}, abort')
 
     return frames[start_frame:]
 
 
-def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config) -> None:
+def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config, osd_type: int) -> None:
     print(f"rendering {len(frames)} frames")
 
-    renderer = partial(render_single_frame, font, tmp_dir, cfg)
+    renderer = partial(render_single_frame, font, tmp_dir, cfg, osd_type)
 
     for i in range(len(frames)-1):
         if frames[i].next_idx != frames[i+1].idx:
@@ -178,11 +249,14 @@ def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config) ->
             pass
 
 
-def run_ffmpeg(start_number: int, bitrate: int, image_dir: str, video_path: pathlib.Path, out_path: pathlib.Path):
-    frame_overlay = ffmpeg.input(f"{image_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=1024)
+def run_ffmpeg(start_number: int, bitrate: int, osd_type: int, image_dir: str, video_path: pathlib.Path, out_path: pathlib.Path):
+    frame_overlay = ffmpeg.input(f"{image_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=2048)
     video = ffmpeg.input(str(video_path), thread_queue_size=2048)
 
-    if args.fakehd or args.hd or args.wide:
+    # TODO: this is calculated in too many places    
+    if osd_type == OSD_TYPE_WS:
+        out_size = {"w": 1920, "h": 1080}
+    elif args.fakehd or args.hd or args.wide:
         out_size = {"w": 1280, "h": 720}
     else:
         out_size = {"w": 960, "h": 720}
@@ -233,7 +307,12 @@ def main(args: Config):
     print(f"verbatim:  {args.verbatim}")
     print(f"loading OSD dump from:  {osd_path}")
 
-    frames = read_osd_frames(osd_path, args.verbatim)
+    osd_type, _ = detect_system(osd_path)
+
+    if osd_type == OSD_TYPE_DJI:
+        frames = read_dji_osd_frames(osd_path, args.verbatim)
+    else:
+        frames = read_ws_osd_frames(osd_path, args.verbatim)
 
     if args.testrun:
         test_path = str(video_path.with_name('test_image.png'))
@@ -241,18 +320,19 @@ def main(args: Config):
         draw_frame(
             font=font,
             frame=frames[args.testframe],
-            cfg=args
+            cfg=args, 
+            osd_type=osd_type
         ).save(test_path)
 
         return
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        render_frames(frames, font, tmp_dir, args)
+        render_frames(frames, font, tmp_dir, args, osd_type)
 
         print(f"passing to ffmpeg, out as {out_path}")
 
         start_number = frames[0].idx
-        run_ffmpeg(start_number, args.bitrate, tmp_dir, video_path, out_path)
+        run_ffmpeg(start_number, args.bitrate, osd_type, tmp_dir, video_path, out_path)
 
 
 if __name__ == "__main__":
@@ -266,6 +346,7 @@ if __name__ == "__main__":
     args.merge_cfg(parser.parse_args())
 
     if os.name == 'nt':
+        # TODO: try to create symlink and set nolinks flag
         import ctypes
         adm = ctypes.windll.shell32.IsUserAnAdmin()
         if not adm and not args.nolinks and not args.testrun:
