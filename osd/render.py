@@ -24,8 +24,8 @@ INTERNAL_W_H_WS = (53, 20)
 def _get_display_dims(cfg: Config, osd_type: int) -> tuple[int, int]:
     # TODO: check for ws
     if osd_type != OSD_TYPE_DJI:
-        display_width = 50
-        display_height = 18
+        display_width = 53
+        display_height = 20
     elif cfg.fakehd:
         display_width = 60
         display_height = 22
@@ -112,7 +112,7 @@ def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type) -> Image.Image:
     else:
         img_size = (960, 720)
 
-    img = img.resize(img_size, Image.Resampling.BICUBIC)
+    img = img.resize(img_size, Image.Resampling.LANCZOS)
 
     return img
 
