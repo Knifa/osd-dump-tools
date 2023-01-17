@@ -22,51 +22,44 @@ INTERNAL_W_H_WS = (53, 20)
 
 
 def _get_display_dims(cfg: Config, osd_type: int) -> tuple[int, int]:
-    # TODO: check for ws
-    if osd_type != OSD_TYPE_DJI:
-        display_width = 53
-        display_height = 20
-    elif cfg.fakehd:
-        display_width = 60
-        display_height = 22
-    elif cfg.hd:
-        display_width = 50
-        display_height = 18
-    else:
-        display_width = 30
-        display_height = 15
+    if cfg.fakehd:
+        return (60, 22)
 
-    return (display_width, display_height)
+    if cfg.hd:
+        return (50, 18)
+
+    return (30, 15)
 
 
 def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type) -> Image.Image:
     if osd_type == OSD_TYPE_DJI:
         internal_width, internal_height = INTERNAL_W_H_DJI
+        char_reader = lambda x, y: frame.data[y + x * internal_height]
+        display_width, display_height = _get_display_dims(cfg, osd_type)
+
     else:
         internal_width, internal_height = INTERNAL_W_H_WS
+        display_width, display_height = INTERNAL_W_H_WS
+        char_reader = lambda x, y: frame.data[x + y * internal_width]
 
-    display_width, display_height = _get_display_dims(cfg, osd_type)
+    tile_width = (HD_TILE_WIDTH if cfg.hd or cfg.fakehd else SD_TILE_WIDTH)
+    tile_height = (HD_TILE_HEIGHT if cfg.hd or cfg.fakehd else SD_TILE_HEIGHT)
 
     img = Image.new(
         "RGBA",
         (
-            display_width  * (HD_TILE_WIDTH  if cfg.hd or cfg.fakehd else SD_TILE_WIDTH),
-            display_height * (HD_TILE_HEIGHT if cfg.hd or cfg.fakehd else SD_TILE_HEIGHT),
+            display_width  * tile_width,
+            display_height * tile_height,
         ),
     )
 
     gps_lat: tuple[int, int] | None = None
     gps_lon: tuple[int, int] | None = None
     alt: tuple[int, int] | None = None
-    tile_width = (HD_TILE_WIDTH if cfg.hd or cfg.fakehd else SD_TILE_WIDTH)
-    tile_height = (HD_TILE_HEIGHT if cfg.hd or cfg.fakehd else SD_TILE_HEIGHT)
 
     for y in range(internal_height):
         for x in range(internal_width):
-            if osd_type == OSD_TYPE_DJI:
-                char = frame.data[y + x * internal_height]
-            else:
-                char = frame.data[x + y * internal_width]
+            char = char_reader(x, y)
             tile = font[char]
 
             if cfg.exclude_area.is_excluded(x, y):
