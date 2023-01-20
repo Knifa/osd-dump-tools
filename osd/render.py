@@ -10,12 +10,23 @@ from .font import Font
 from .frame import Frame
 from .config import Config
 
-LAT_CHAR_CODE = 3
-LON_CHAR_CODE = 4
-ALT_CHAR_CODE = 118
 
-ALT_LEN = 4
-GPS_LEN = 9
+class ArduParams:
+    LAT_CHAR_CODE: int = 167
+    LON_CHAR_CODE: int = 166
+    ALT_CHAR_CODE: int = 177
+
+    ALT_LEN: int = 4
+    GPS_LEN: int = 12
+
+class InavParams:
+    LAT_CHAR_CODE: int = 3
+    LON_CHAR_CODE: int = 4
+    ALT_CHAR_CODE: int = 118
+
+    ALT_LEN: int = 4
+    GPS_LEN: int = 9
+
 
 INTERNAL_W_H_DJI = (60, 22)
 INTERNAL_W_H_WS = (53, 20)
@@ -31,7 +42,7 @@ def _get_display_dims(cfg: Config, osd_type: int) -> tuple[int, int]:
     return (30, 15)
 
 
-def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type) -> Image.Image:
+def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type, exclusions) -> Image.Image:
     if osd_type == OSD_TYPE_DJI:
         internal_width, internal_height = INTERNAL_W_H_DJI
         char_reader = lambda x, y: frame.data[y + x * internal_height]
@@ -57,46 +68,46 @@ def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type) -> Image.Image:
     gps_lon: tuple[int, int] | None = None
     alt: tuple[int, int] | None = None
 
+    masking_font_no = ord(' ')
+    if cfg.testrun:
+        masking_font_no = ord('X')
+
+    masking_tile = font[masking_font_no]
+
     for y in range(internal_height):
         for x in range(internal_width):
             char = char_reader(x, y)
             tile = font[char]
 
             if cfg.exclude_area.is_excluded(x, y):
-                font_no = ord(' ')
-                if cfg.testrun:
-                    font_no = ord('X')
-
-                tile = font[font_no]
+                tile = masking_tile
 
             if cfg.hide_gps:
-                if char == LAT_CHAR_CODE:
+                if char == exclusions.LAT_CHAR_CODE:
                     gps_lat = (x, y)
-                elif char == LON_CHAR_CODE:
+                elif char == exclusions.LON_CHAR_CODE:
                     gps_lon = (x, y)
 
-            if cfg.hide_alt and char == ALT_CHAR_CODE:
+            if cfg.hide_alt and char == exclusions.ALT_CHAR_CODE:
                 alt = (x, y)
 
             img.paste(tile, (x * tile_width, y * tile_height,), )
 
     # hide gps/alt data
     if gps_lat and gps_lon:
-        tile = font[0]
-        for i in range(GPS_LEN + 1):
+        for i in range(exclusions.GPS_LEN + 1):
             x = (gps_lat[0] + i) * tile_width
             y = gps_lat[1] * tile_height
-            img.paste(tile, (x , y,), )
+            img.paste(masking_tile, (x , y,), )
             x = (gps_lon[0] + i) * tile_width
             y = gps_lon[1] * tile_height
-            img.paste(tile, (x , y,), )
+            img.paste(masking_tile, (x , y,), )
 
     if alt:
-        tile = font[0]
-        for i in range(ALT_LEN + 1):
+        for i in range(exclusions.ALT_LEN + 1):
             x = (alt[0] - i) * tile_width
             y = alt[1] * tile_height
-            img.paste(tile, (x , y,), )
+            img.paste(masking_tile, (x , y,), )
 
     if osd_type != OSD_TYPE_DJI:
         img_size = (1920, 1080)
@@ -111,11 +122,16 @@ def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type) -> Image.Image:
 
 
 def render_single_frame(font: Font, tmp_dir: str, cfg: Config, osd_type, frame: Frame) -> None:
+    exclusions = InavParams
+    if cfg.ardu:
+        exclusions = ArduParams
+
     osd_img = draw_frame(
         font=font,
         frame=frame,
         cfg=cfg,
         osd_type=osd_type,
+        exclusions=exclusions,
     )
 
     fname = f"{tmp_dir}/{frame.idx:016}.png"
@@ -134,3 +150,20 @@ def render_single_frame(font: Font, tmp_dir: str, cfg: Config, osd_type, frame: 
                 osd_img.save(lfname)
             else:
                 os.symlink(fname, lfname)
+
+
+def render_test_frame(font: Font, frame: Frame, cfg: Config, osd_type) -> None:
+    exclusions = InavParams
+    if cfg.ardu:
+        exclusions = ArduParams
+
+    osd_img = draw_frame(
+        font=font,
+        frame=frame,
+        cfg=cfg,
+        osd_type=osd_type,
+        exclusions=exclusions,
+    )
+
+    return osd_img
+

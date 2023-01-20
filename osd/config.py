@@ -52,7 +52,7 @@ class Config:
     params: tuple[tuple[str, type]] = (
         ('font', str), ('hd', bool), ('wide', bool), ('fakehd', bool), ('bitrate', int),
         ('nolinks', bool), ('testrun', bool), ('testframe', int), ('hq', bool),
-        ('hide_gps', bool), ('hide_alt', bool), ('verbatim', bool), ('singlecore', bool),
+        ('hide_gps', bool), ('hide_alt', bool), ('verbatim', bool), ('singlecore', bool), ('ardu', bool)
     )
 
     def __init__(self, cfg: ConfigParser):
@@ -71,6 +71,7 @@ class Config:
         self.hide_alt: bool = False
         self.verbatim: bool = False
         self.singlecore: bool = False
+        self.ardu: bool = False
 
         self.exclude_area = MultiExcludedAreas()
 

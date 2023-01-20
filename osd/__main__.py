@@ -14,7 +14,7 @@ import ffmpeg
 
 from tqdm import tqdm
 
-from .render import draw_frame, render_single_frame
+from .render import draw_frame, render_test_frame
 from .frame import Frame
 from .font import Font
 from .const import CONFIG_FILE_NAME, OSD_TYPE_DJI, OSD_TYPE_WS, FW_ARDU, FW_INAV, FW_BETAFL, FW_UNKNOWN
@@ -97,6 +97,10 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--singlecore", action="store_true", default=None, help="Run on single procesor core (slow)"
+    )
+
+    parser.add_argument(
+        "--ardu", action="store_true", default=None, help="Hide gps/alt for ArduPilot"
     )
 
     hdivity = parser.add_mutually_exclusive_group()
@@ -317,7 +321,7 @@ def main(args: Config):
     if args.testrun:
         test_path = str(video_path.with_name('test_image.png'))
         print(f"test frame created: {test_path}")
-        draw_frame(
+        render_test_frame(
             font=font,
             frame=frames[args.testframe],
             cfg=args, 
