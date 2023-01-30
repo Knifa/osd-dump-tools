@@ -9,8 +9,10 @@ from .const import HD_TILE_WIDTH, SD_TILE_WIDTH, HD_TILE_HEIGHT, SD_TILE_HEIGHT,
 from .font import Font
 from .frame import Frame
 from .config import Config
+from .utils.ro_cls import read_only_class
 
 
+@read_only_class
 class ArduParams:
     LAT_CHAR_CODE: int = 167
     LON_CHAR_CODE: int = 166
@@ -19,6 +21,7 @@ class ArduParams:
     ALT_LEN: int = 4
     GPS_LEN: int = 12
 
+@read_only_class
 class InavParams:
     LAT_CHAR_CODE: int = 3
     LON_CHAR_CODE: int = 4

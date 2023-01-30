@@ -5,6 +5,7 @@ from configparser import ConfigParser
 from .const import DEFAULT_SECTION
 
 
+
 class ExcludeArea:
     def __init__(self, s: str = None):
 
@@ -18,7 +19,7 @@ class ExcludeArea:
 
         nums = s.split(',')
         if len(nums) != 4:
-            raise Exception('Incorrect no of region parameters, should be 4, received {len(nums)}.')
+            raise ValueError('Incorrect no of region parameters, should be 4, received {len(nums)}.')
 
         self.x1 = int(nums[0])
         self.y1 = int(nums[1])
