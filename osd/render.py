@@ -1,5 +1,5 @@
-from __future__ import annotations
-
+#from __future__ import annotations
+from dataclasses import dataclass
 import os
 from pathlib import Path
 
@@ -45,6 +45,34 @@ def _get_display_dims(cfg: Config, osd_type: int) -> tuple[int, int]:
     return (30, 15)
 
 
+@dataclass
+class HiddenItemsCache():
+    gps_lat: tuple[int, int] | None = None
+    gps_lon: tuple[int, int] | None = None
+    alt: tuple[int, int] | None = None
+
+_items_cache = HiddenItemsCache()
+
+def hide_items(img: Image, font: Font, exclusions, masking_tile, tile_width, tile_height) -> None:
+    if _items_cache.gps_lat:
+        for i in range(exclusions.GPS_LEN + 1):
+            x = (_items_cache.gps_lat[0] + i) * tile_width
+            y = _items_cache.gps_lat[1] * tile_height
+            img.paste(masking_tile, (x , y,), )
+
+    if _items_cache.gps_lon:
+        for i in range(exclusions.GPS_LEN + 1):
+            x = (_items_cache.gps_lon[0] + i) * tile_width
+            y = _items_cache.gps_lon[1] * tile_height
+            img.paste(masking_tile, (x , y,), )
+
+    if _items_cache.alt:
+        for i in range(exclusions.ALT_LEN + 1):
+            x = (_items_cache.alt[0] - i) * tile_width
+            y = _items_cache.alt[1] * tile_height
+            img.paste(masking_tile, (x , y,), )
+
+
 def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type, exclusions) -> Image.Image:
     if osd_type == OSD_TYPE_DJI:
         internal_width, internal_height = INTERNAL_W_H_DJI
@@ -88,32 +116,22 @@ def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type, exclusions) -> I
             if cfg.hide_gps:
                 if char == exclusions.LAT_CHAR_CODE:
                     gps_lat = (x, y)
+                    _items_cache.gps_lat = (x, y)
+                    
                 elif char == exclusions.LON_CHAR_CODE:
                     gps_lon = (x, y)
+                    _items_cache.gps_lon = (x, y)
 
             if cfg.hide_alt and char == exclusions.ALT_CHAR_CODE:
                 alt = (x, y)
+                _items_cache.alt = (x, y)
 
             img.paste(tile, (x * tile_width, y * tile_height,), )
 
     # hide gps/alt data
-    if gps_lat:
-        for i in range(exclusions.GPS_LEN + 1):
-            x = (gps_lat[0] + i) * tile_width
-            y = gps_lat[1] * tile_height
-            img.paste(masking_tile, (x , y,), )
-
-    if gps_lon:
-        for i in range(exclusions.GPS_LEN + 1):
-            x = (gps_lon[0] + i) * tile_width
-            y = gps_lon[1] * tile_height
-            img.paste(masking_tile, (x , y,), )
-
-    if alt:
-        for i in range(exclusions.ALT_LEN + 1):
-            x = (alt[0] - i) * tile_width
-            y = alt[1] * tile_height
-            img.paste(masking_tile, (x , y,), )
+    # if any of items was present on frame we will use cache to be sure that all are deleted
+    if gps_lat or gps_lon or alt:
+        hide_items(img, font, exclusions, masking_tile, tile_width, tile_height)
 
     if osd_type != OSD_TYPE_DJI:
         img_size = (1920, 1080)
