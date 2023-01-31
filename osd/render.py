@@ -97,11 +97,14 @@ def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type, exclusions) -> I
             img.paste(tile, (x * tile_width, y * tile_height,), )
 
     # hide gps/alt data
-    if gps_lat and gps_lon:
+    if gps_lat:
         for i in range(exclusions.GPS_LEN + 1):
             x = (gps_lat[0] + i) * tile_width
             y = gps_lat[1] * tile_height
             img.paste(masking_tile, (x , y,), )
+
+    if gps_lon:
+        for i in range(exclusions.GPS_LEN + 1):
             x = (gps_lon[0] + i) * tile_width
             y = gps_lon[1] * tile_height
             img.paste(masking_tile, (x , y,), )
