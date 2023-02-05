@@ -8,6 +8,8 @@ import pathlib
 import struct
 import sys
 import tempfile
+import time
+import subprocess
 from configparser import ConfigParser
 
 import ffmpeg
@@ -253,10 +255,36 @@ def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config, os
             pass
 
 
-def run_ffmpeg(start_number: int, bitrate: int, osd_type: int, image_dir: str, video_path: pathlib.Path, out_path: pathlib.Path):
-    frame_overlay = ffmpeg.input(f"{image_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=2048)
-    video = ffmpeg.input(str(video_path), thread_queue_size=2048)
-    # TODO: video.global_args('-hwaccel')
+def find_codec():
+    # code borrowed from ws-osd
+
+    # list of codes, not all are avalilable on all OS
+    # supported os       mac           w/l          w            l            w/l         w            l            m/w/l
+    codecs = ['h264_videotoolbox', 'h264_nvenc', 'h264_amf', 'h264_vaapi', 'h264_qsv', 'h264_mf', 'h264_v4l2m2m', 'libx264']
+    cmd_line = 'ffmpeg -y -hwaccel auto -f lavfi -i nullsrc -c:v {0} -frames:v 1 -f null -'
+    for codec in codecs:
+        cmd = (cmd_line.format(codec)).split(" ")
+        ret = subprocess.run(cmd, 
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
+
+        if ret.returncode == 0:
+            return codec
+
+    return None
+    
+
+def run_ffmpeg(start_number: int, cfg: Config, osd_type: int, image_dir: str, video_path: pathlib.Path, out_path: pathlib.Path):
+    codec = find_codec()
+    if not codec:
+        print('No ffmpeg codec found')
+        sys.exit(2)
+
+    if cfg.verbatim:
+        print(f'Found a working codec: {codec}')
+        
+    frame_overlay = ffmpeg.input(f"{image_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=4096)
+    video = ffmpeg.input(str(video_path), thread_queue_size=2048, hwaccel="auto")
 
     # TODO: this is calculated in too many places    
     if osd_type == OSD_TYPE_WS:
@@ -267,7 +295,9 @@ def run_ffmpeg(start_number: int, bitrate: int, osd_type: int, image_dir: str, v
         out_size = {"w": 960, "h": 720}
 
     output_params = {
-        'video_bitrate': f"{bitrate}M",
+        'video_bitrate': f"{cfg.bitrate}M",
+        'c:v': codec,
+        'acodec': 'copy',
     }
 
     # from https://ffmpeg.org/faq.html#Which-are-good-parameters-for-encoding-high-quality-MPEG_002d4_003f
@@ -292,7 +322,8 @@ def run_ffmpeg(start_number: int, bitrate: int, osd_type: int, image_dir: str, v
         .global_args('-loglevel', 'info' if args.verbatim else 'error')
         .global_args('-stats')
         .global_args('-hide_banner')
-        .run(overwrite_output=True)
+        .overwrite_output()
+        .run()
     )
 
 
@@ -332,12 +363,21 @@ def main(args: Config):
         return
 
     with tempfile.TemporaryDirectory() as tmp_dir:
+        tm = time.time()
         render_frames(frames, font, tmp_dir, args, osd_type)
+        if args.verbatim:
+            dt = (time.time() - tm)
+            print(f'Frames rendered in {dt} s')
+
 
         print(f"passing to ffmpeg, out as {out_path}")
 
+        tm = time.time()
         start_number = frames[0].idx
-        run_ffmpeg(start_number, args.bitrate, osd_type, tmp_dir, video_path, out_path)
+        run_ffmpeg(start_number, args, osd_type, tmp_dir, video_path, out_path)
+        if args.verbatim:
+            dt = (time.time() - tm)
+            print(f'Video rendered in {dt} s')
 
 
 if __name__ == "__main__":
