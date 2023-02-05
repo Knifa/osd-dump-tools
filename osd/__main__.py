@@ -256,6 +256,7 @@ def render_frames(frames: list[Frame], font: Font, tmp_dir: str, cfg: Config, os
 def run_ffmpeg(start_number: int, bitrate: int, osd_type: int, image_dir: str, video_path: pathlib.Path, out_path: pathlib.Path):
     frame_overlay = ffmpeg.input(f"{image_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=2048)
     video = ffmpeg.input(str(video_path), thread_queue_size=2048)
+    # TODO: video.global_args('-hwaccel')
 
     # TODO: this is calculated in too many places    
     if osd_type == OSD_TYPE_WS:
