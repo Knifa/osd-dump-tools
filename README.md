@@ -29,7 +29,7 @@ Current walksnail limitation is only 60fps and anly full hd.
 
 ```shell
 # Setting up a virtual environment is recommended, but not required.
-# on linux or wsl
+# on linux, wsl or macos
 python -m venv venv
 source ./venv/bin/activate
 
@@ -66,10 +66,15 @@ $ python -m osd --help
     --hq          render output files with high quality as described in [FFMPEG FAQ](https://ffmpeg.org/faq.html#Which-are-good-parameters-for-encoding-high-quality-MPEG_002d4_003f)
     --testrun     creates overlay image in video directory, very useful to test --ignore_area option, ignoread areas are marked with X
     --testframe   use frame no from osd file to test data, useful if default frame displays something else than normal osd (like flight summary)
-    --hide_gps    automatically hides gps coordinates from video (works for iNav, not tested on ArduPilot)
-    --hide_alt    automatically hides altitude (works for iNav, not tested on ArduPilot)
+    --hide_gps    automatically hides gps coordinates from video
+    --hide_alt    automatically hides altitude
+    --hide_dist   automatically hides distance from home
     --testrun     create overlay image with osd data in video location. Use to check ignore_area regions, regions are filled with X
     --testframe   in case default frame doesn't have proper osd have (i.e. flight summary) for testrun select osd frame no to be used for testrun
+    --verbatim    display detailed information
+    --singlecore  run on single procesor core (slow)
+    --ardu        necessary to hide gps/alt/dist for ArduPilot
+    
 
 # Config file
 All parameters can be set in ini file located in osd folder. Parameters can be overriden by ini file in current directory.
