@@ -78,11 +78,15 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--hide_gps", action="store_true", default=None, help="Don't render GPS coords. Works on iNav."
+        "--hide_gps", action="store_true", default=None, help="Don't render GPS coords."
     )
 
     parser.add_argument(
-        "--hide_alt", action="store_true", default=None, help="Don't render GPS coords. Works on iNav."
+        "--hide_alt", action="store_true", default=None, help="Don't render altitude."
+    )
+
+    parser.add_argument(
+        "--hide_dist", action="store_true", default=None, help="Don't render distance from home."
     )
 
     parser.add_argument(
@@ -282,7 +286,7 @@ def run_ffmpeg(start_number: int, cfg: Config, osd_type: int, image_dir: str, vi
 
     if cfg.verbatim:
         print(f'Found a working codec: {codec}')
-        
+
     frame_overlay = ffmpeg.input(f"{image_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=4096)
     video = ffmpeg.input(str(video_path), thread_queue_size=2048, hwaccel="auto")
 
