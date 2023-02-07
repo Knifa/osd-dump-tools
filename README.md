@@ -49,7 +49,7 @@ $ pip install -r requirements.txt
 # Check out the options.
 $ python -m osd --help
 
-  usage: __main__.py [-h] [--font FONT] [--wide] [--hd] video
+  usage: __main__.py [-h] [--font FONT] video
 
   positional arguments:
     video        video file e.g. DJIG0007.mp4
@@ -57,7 +57,6 @@ $ python -m osd --help
   options:
     -h, --help    show this help message and exit
     --font FONT   font basename e.g. "font"
-    --wide        is this a 16:9 video?
     --hd          is this an HD OSD recording?
     --fakehd      are you using fakehd?
     --bitrate     output bitrate, default is 25mbps
@@ -74,13 +73,14 @@ $ python -m osd --help
     --verbatim    display detailed information
     --singlecore  run on single procesor core (slow)
     --ardu        necessary to hide gps/alt/dist for ArduPilot
+    --height [720, 1080, 1440]  output video resolution, default is 1080
     
 
 # Config file
 All parameters can be set in ini file located in osd folder. Parameters can be overriden by ini file in current directory.
 
 # Convert your recording!
-$ python -m osd --font font_inav --hd --wide DJIG0001.mp4
+$ python -m osd --font font_inav --hd  DJIG0001.mp4
 
   INFO:__main__:loading OSD dump from DJIG0001.osd
   INFO:__main__:rendering 168 frames

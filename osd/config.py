@@ -51,23 +51,22 @@ class MultiExcludedAreas:
 
 class Config:
     params: tuple[tuple[str, type]] = (
-        ('font', str), ('hd', bool), ('wide', bool), ('fakehd', bool), ('bitrate', int),
+        ('font', str), ('hd', bool), ('fakehd', bool), ('bitrate', int),
         ('nolinks', bool), ('testrun', bool), ('testframe', int), ('hq', bool),
         ('hide_gps', bool), ('hide_alt', bool), ('hide_dist', bool), ('verbatim', bool), 
-        ('singlecore', bool), ('ardu', bool)
+        ('singlecore', bool), ('ardu', bool), ('height', int), ('narrow', bool),
     )
 
     def __init__(self, cfg: ConfigParser):
         super().__init__()
 
         self.font : str = ''
-        self.wide: bool = False
         self.fakehd: bool = False
         self.bitrate: int = 25
         self.nolinks: bool = False
         self.testrun: bool = False
         self.testframe: int = -1
-        self.hd: bool = False
+        self.hd: bool = True
         self.hq: bool = False
         self.hide_gps: bool = False
         self.hide_alt: bool = False
@@ -75,6 +74,8 @@ class Config:
         self.verbatim: bool = False
         self.singlecore: bool = False
         self.ardu: bool = False
+        self.height: int
+        self.narrow: bool = False
 
         self.exclude_area = MultiExcludedAreas()
 
@@ -113,3 +114,9 @@ class Config:
 
         # merge regions
         self.exclude_area.merge(args.ignore_area)
+
+    def calculate(self):
+        if self.narrow:
+            self.width = (self.height * 4) // 3
+        else:
+            self.width = (self.height * 16) // 9

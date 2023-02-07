@@ -5,35 +5,11 @@ from pathlib import Path
 
 from PIL import Image
 
-from .const import HD_TILE_WIDTH, SD_TILE_WIDTH, HD_TILE_HEIGHT, SD_TILE_HEIGHT, OSD_TYPE_DJI
+from .const import HD_TILE_WIDTH, SD_TILE_WIDTH, HD_TILE_HEIGHT, SD_TILE_HEIGHT, OSD_TYPE_DJI, ArduParams, InavParams
 from .font import Font
 from .frame import Frame
 from .config import Config
 from .utils.ro_cls import read_only_class
-
-
-@read_only_class
-class ArduParams:
-    LAT_CHAR_CODE: int = 167
-    LON_CHAR_CODE: int = 166
-    ALT_CHAR_CODE: int = 177
-    HOME_CHAR_CODE: int = 191
-
-    ALT_LEN: int = 4
-    GPS_LEN: int = 12
-    HOME_LEN: int = 6
-
-@read_only_class
-class InavParams:
-    LAT_CHAR_CODE: int = 3
-    LON_CHAR_CODE: int = 4
-    ALT_CHAR_CODE: int = 118
-    HOME_CHAR_CODE: int = 16
-
-    ALT_LEN: int = 4
-    GPS_LEN: int = 9
-    HOME_LEN: int = 5
-
 
 INTERNAL_W_H_DJI = (60, 22)
 INTERNAL_W_H_WS = (53, 20)
@@ -124,14 +100,13 @@ def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type, exclusions) -> I
             if cfg.exclude_area.is_excluded(x, y):
                 tile = masking_tile
 
-            if cfg.hide_gps:
-                if char == exclusions.LAT_CHAR_CODE:
-                    gps_lat = (x, y)
-                    _items_cache.gps_lat = (x, y)
+            if cfg.hide_gps and char == exclusions.LAT_CHAR_CODE:
+                gps_lat = (x, y)
+                _items_cache.gps_lat = (x, y)
                     
-                elif char == exclusions.LON_CHAR_CODE:
-                    gps_lon = (x, y)
-                    _items_cache.gps_lon = (x, y)
+            if cfg.hide_gps and char == exclusions.LON_CHAR_CODE:
+                gps_lon = (x, y)
+                _items_cache.gps_lon = (x, y)
 
             if cfg.hide_alt and char == exclusions.ALT_CHAR_CODE:
                 alt = (x, y)
@@ -148,16 +123,12 @@ def draw_frame(font: Font, frame: Frame, cfg: Config, osd_type, exclusions) -> I
     if gps_lat or gps_lon or alt:
         hide_items(img, font, exclusions, masking_tile, tile_width, tile_height)
 
-    if osd_type != OSD_TYPE_DJI:
-        img_size = (1920, 1080)
-    elif cfg.fakehd or cfg.hd or cfg.wide:
-        img_size = (1280, 720)
-    else:
-        img_size = (960, 720)
+    img_size = (cfg.width, cfg.height)
 
     img = img.resize(img_size, Image.Resampling.LANCZOS)
 
     return img
+
 
 def render_single_frame(font: Font, tmp_dir: str, cfg: Config, osd_type, frame: Frame) -> None:
     exclusions = InavParams

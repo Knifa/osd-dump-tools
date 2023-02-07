@@ -60,15 +60,20 @@ def build_cmd_line_parser() -> argparse.ArgumentParser:
         "--font", type=str, default=None, help='font basename e.g. "font"'
     )
     parser.add_argument(
-        "--wide", action="store_true", default=None, help="is this a 16:9 video?"
-    )
-
-    parser.add_argument(
         "--bitrate", type=int, default=None, help='output bitrate'
     )
     parser.add_argument(
         "--ignore_area", type=ExcludeArea, nargs='*', default="-1, -1, 0, 0", help="don't display area (in fonts, x1,y1,x2,y2), i.e. 10,10,15,15, can be repeated"
     )
+
+    parser.add_argument(
+        "--height", type=int, default="1080", choices=[720, 1080, 1440], help="output resolution in lines, can be 720, 1080, 1440"
+    )
+
+    parser.add_argument(
+        "--narrow", action="store_true", default=None, help="use 4:3 proportions instead of default 16:9"
+    )
+
     parser.add_argument(
         "--nolinks", action="store_true", default=None, help="Copy frames instead of linking (windows without priviledged shell)"
     )
@@ -278,7 +283,7 @@ def find_codec():
     return None
     
 
-def run_ffmpeg(start_number: int, cfg: Config, osd_type: int, image_dir: str, video_path: pathlib.Path, out_path: pathlib.Path):
+def run_ffmpeg(start_number: int, cfg: Config, image_dir: str, video_path: pathlib.Path, out_path: pathlib.Path):
     codec = find_codec()
     if not codec:
         print('No ffmpeg codec found')
@@ -290,13 +295,7 @@ def run_ffmpeg(start_number: int, cfg: Config, osd_type: int, image_dir: str, vi
     frame_overlay = ffmpeg.input(f"{image_dir}/%016d.png", start_number=start_number, framerate=60, thread_queue_size=4096)
     video = ffmpeg.input(str(video_path), thread_queue_size=2048, hwaccel="auto")
 
-    # TODO: this is calculated in too many places    
-    if osd_type == OSD_TYPE_WS:
-        out_size = {"w": 1920, "h": 1080}
-    elif args.fakehd or args.hd or args.wide:
-        out_size = {"w": 1280, "h": 720}
-    else:
-        out_size = {"w": 960, "h": 720}
+    out_size = {"w": cfg.width, "h": cfg.height}
 
     output_params = {
         'video_bitrate': f"{cfg.bitrate}M",
@@ -378,7 +377,7 @@ def main(args: Config):
 
         tm = time.time()
         start_number = frames[0].idx
-        run_ffmpeg(start_number, args, osd_type, tmp_dir, video_path, out_path)
+        run_ffmpeg(start_number, args, tmp_dir, video_path, out_path)
         if args.verbatim:
             dt = (time.time() - tm)
             print(f'Video rendered in {dt} s')
@@ -393,6 +392,8 @@ if __name__ == "__main__":
 
     args = Config(cfg)
     args.merge_cfg(parser.parse_args())
+
+    args.calculate()
 
     if os.name == 'nt':
         # TODO: try to create symlink and set nolinks flag
